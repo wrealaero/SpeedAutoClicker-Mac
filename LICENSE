@@ -1,0 +1,28 @@
+
+### Implementation Notes:
+
+1. **Performance**: The code is optimized for your 2015 Mac. The duty cycle implementation is real and precise.
+
+2. **Compatibility**: 
+   - First build for Intel Macs (your 2015 Mac)
+   - Later we can add M1 support via universal binaries
+
+3. **Permissions**:
+   - The app will need Accessibility permissions to control the mouse
+   - The installer will prompt for this the first time you run it
+
+4. **Updates**:
+   - The GitHub release workflow automatically builds the app when you tag a release
+   - The updater checks GitHub for new versions
+
+5. **Hotkeys**:
+   - Supports complex combinations like Shift+Ctrl+F8
+   - Global hotkeys work even when app is in background
+
+To get started:
+1. Create the GitHub repo with this structure
+2. Push the initial code
+3. Create a v1.0.0 tag to trigger the first build
+4. Test the installer script
+
+Would you like me to elaborate on any specific part or make adjustments to better match your vision?
