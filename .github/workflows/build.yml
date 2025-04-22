@@ -1,37 +1,36 @@
 name: Build
 on:
   push:
-    tags: ['v*']  # Only run on version tags (v1.0.0, etc.)
+    tags: ['v*']
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
-          
+
       - name: Install dependencies
         run: |
-          pip install py2app
+          python -m pip install --upgrade pip
+          pip install py2app pynput PyQt5
           pip install -r requirements.txt
-          
-      - name: Build app
+
+      - name: Build application
         run: |
           python setup.py py2app
-          zip -r SpeedAutoClicker-Mac.zip dist/SpeedAutoClicker.app
-          
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
+          ditto -c -k --sequesterRsrc --keepParent dist/SpeedAutoClicker.app SpeedAutoClicker-Mac.zip
+
+      - uses: actions/upload-artifact@v2
         with:
           name: SpeedAutoClicker-Mac
           path: SpeedAutoClicker-Mac.zip
-          
-      - name: Create release
-        uses: softprops/action-gh-release@v1
+
+      - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: SpeedAutoClicker-Mac.zip
