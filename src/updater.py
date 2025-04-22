@@ -5,7 +5,7 @@ import sys
 import subprocess
 from version import __version__
 
-GITHUB_REPO = "yourusername/SpeedAutoClicker-Mac"
+GITHUB_REPO = "wrealaero/SpeedAutoClicker-Mac"
 
 def check_for_updates(current_version):
     try:
