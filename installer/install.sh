@@ -1,7 +1,6 @@
 #!/bin/bash
 echo "Installing SpeedAutoClicker..."
 
-# GitHub repo details
 REPO_OWNER="wrealaero"
 REPO_NAME="SpeedAutoClicker-Mac"
 
