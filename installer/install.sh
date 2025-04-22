@@ -1,6 +1,15 @@
 #!/bin/bash
+
 echo "Installing SpeedAutoClicker..."
-curl -L https://github.com/$USER/SpeedAutoClicker-Mac/releases/latest/download/SpeedAutoClicker-Mac.zip -o /tmp/SpeedAutoClicker.zip
-unzip -o /tmp/SpeedAutoClicker.zip -d /Applications/
+ZIP_URL=$(curl -s https://api.github.com/repos/YOUR_USERNAME/SpeedAutoClicker-Mac/releases/latest | grep "browser_download_url" | cut -d '"' -f 4)
+curl -L "$ZIP_URL" -o /tmp/SpeedAutoClicker.zip || {
+    echo "❌ Download failed!"
+    exit 1
+}
+unzip -o /tmp/SpeedAutoClicker.zip -d /Applications/ || {
+    echo "❌ Installation failed!"
+    exit 1
+}
 xattr -rd com.apple.quarantine /Applications/SpeedAutoClicker.app
-echo "Done! Open from Spotlight."
+echo "✅ Installed! Launch from Spotlight or:"
+echo "   open /Applications/SpeedAutoClicker.app"
