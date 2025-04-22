@@ -1,10 +1,15 @@
-import requests
-from version import __version__
+from setuptools import setup
 
-def check_update():
-    try:
-        r = requests.get("https://api.github.com/repos/wrealaero/SpeedAutoClicker-Mac/releases/latest")
-        latest_version = r.json()["tag_name"]
-        return latest_version != f"v{__version__}"
-    except:
-        return False
+APP = ['src/main.py']
+DATA_FILES = [('assets', ['src/assets/icon.icns'])]
+OPTIONS = {
+    'argv_emulation': True,
+    'iconfile': 'src/assets/icon.icns',
+}
+
+setup(
+    app=APP,
+    data_files=DATA_FILES,
+    options={'py2app': OPTIONS},
+    setup_requires=['py2app'],
+)
