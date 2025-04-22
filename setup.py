@@ -1,22 +1,10 @@
-from setuptools import setup
+import requests
+from version import __version__
 
-APP = ['src/main.py']
-DATA_FILES = [
-    ('assets', ['src/assets/icon.icns', 'src/assets/logo.png']),
-]
-OPTIONS = {
-    'iconfile': 'src/assets/icon.icns',
-    'plist': {
-        'CFBundleName': "SpeedAutoClicker",
-        'CFBundleVersion': "1.0.0",
-        'NSRequiresAquaSystemAppearance': False
-    },
-    'packages': ['pynput', 'PyQt5'],
-}
-
-setup(
-    app=APP,
-    data_files=DATA_FILES,
-    options={'py2app': OPTIONS},
-    setup_requires=['py2app'],
-)
+def check_update():
+    try:
+        r = requests.get("https://api.github.com/repos/wrealaero/SpeedAutoClicker-Mac/releases/latest")
+        latest_version = r.json()["tag_name"]
+        return latest_version != f"v{__version__}"
+    except:
+        return False
