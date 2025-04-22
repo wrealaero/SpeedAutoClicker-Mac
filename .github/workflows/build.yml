@@ -1,15 +1,21 @@
 name: Build
-on: [push]
+on: 
+  push:
+    tags: ['v*']
+
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-      - run: |
-          pip install py2app pynput PyQt5
-          python setup.py py2app
-          zip -r SpeedAutoClicker-Mac.zip dist/SpeedAutoClicker.app
+      - uses: actions/setup-python@v2
+      - run: pip install -r requirements.txt
+      - run: python setup.py py2app
+      - run: zip -r SpeedAutoClicker-Mac.zip dist/SpeedAutoClicker.app
       - uses: actions/upload-artifact@v2
         with:
-          name: App
+          name: SpeedAutoClicker-Mac
           path: SpeedAutoClicker-Mac.zip
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: SpeedAutoClicker-Mac.zip
