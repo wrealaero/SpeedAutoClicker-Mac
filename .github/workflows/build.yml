@@ -7,10 +7,10 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3  # ← CHANGED TO v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4  # ← CHANGED TO v4
         with:
           python-version: '3.9'
 
@@ -19,18 +19,14 @@ jobs:
           pip install py2app==0.28.6
           pip install -r requirements.txt
 
-      - name: Build with debug output
+      - name: Build app
         run: |
-          echo "Current directory structure:"
-          ls -R
-          echo "Building app..."
-          python setup.py py2app > build.log 2>&1 || cat build.log
-          ls -lh dist/
+          python setup.py py2app
           ditto -c -k --sequesterRsrc --keepParent dist/SpeedAutoClicker.app SpeedAutoClicker-Mac.zip
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3  # ← CHANGED TO v3
         with:
-          name: App
+          name: SpeedAutoClicker
           path: SpeedAutoClicker-Mac.zip
           retention-days: 1
 
