@@ -1,4 +1,4 @@
-# AeroClicker
+# Aerout SpeedAutoClicker
 
 An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more.
 
