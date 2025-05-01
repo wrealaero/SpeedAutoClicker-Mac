@@ -1,4 +1,4 @@
-# Python
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,7 +21,6 @@ var/
 *.egg
 venv/
 
-# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -35,12 +34,12 @@ Icon
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 
-# IDE
+
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Project specific
+
 .aeroutclicker_settings.json
 
