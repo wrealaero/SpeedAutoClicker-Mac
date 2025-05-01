@@ -1,4 +1,4 @@
-# AeroutClicker
+# SpeedAutoClicker-Mac
 
 An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more.
 
@@ -19,8 +19,8 @@ An advanced auto-clicker for macOS with precise control over click rate, duty cy
 
 ```bash
 # Clone the repository
-git clone https://github.com/wrealaero/AeroutClicker.git
-cd AeroutClicker
+git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
+cd SpeedAutoClicker-Mac
 
 # Run the installation script
 chmod +x install.sh
@@ -30,6 +30,9 @@ chmod +x install.sh
 ### Method 2: Manual Installation
 
 ```bash
+# Download the repository as ZIP and extract it
+# Navigate to the extracted directory
+
 # Install dependencies
 pip3 install -r requirements.txt
 
@@ -94,47 +97,3 @@ If you encounter any issues or have suggestions:
 ## License
 
 This project is open source and available under the MIT License.
-```
-
-Now, let's continue with the remaining parts of the project.
-
-Let's make sure the requirements.txt file is complete:
-
-```text:requirements.txt
-pynput==1.7.6
-pyobjc-framework-Quartz==9.2
-```
-
-The installation script is also complete:
-
-```bash:install.sh
-#!/bin/bash
-
-echo "Installing AeroutClicker dependencies..."
-
-# Check if Python is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Python 3 is not installed. Please install Python 3 and try again."
-    exit 1
-fi
-
-# Create virtual environment (optional)
-python3 -m venv venv 2>/dev/null || echo "Virtual environment creation failed, continuing with system Python..."
-
-# Activate virtual environment if it was created
-if [ -d "venv" ]; then
-    source venv/bin/activate
-fi
-
-# Install dependencies
-python3 -m pip install -r requirements.txt
-
-echo "Installation complete!"
-echo "To run AeroutClicker, use: python3 autoclicker.py"
-
-# Make the autoclicker.py executable
-chmod +x autoclicker.py
-
-echo "Note: You may need to grant accessibility permissions to use AeroutClicker."
-echo "Go to System Preferences > Security & Privacy > Privacy > Accessibility"
-echo "and add Terminal or the Python application to the list of allowed apps."
