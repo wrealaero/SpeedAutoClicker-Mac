@@ -15,7 +15,7 @@ An advanced auto-clicker for macOS with precise control over click rate, duty cy
 
 ## Installation
 
-### Method 1: Clone and Install
+### Method 1: Using the Virtual Environment (Recommended)
 
 ```bash
 # Clone the repository
@@ -25,40 +25,73 @@ cd SpeedAutoClicker-Mac
 # Run the installation script
 chmod +x install.sh
 ./install.sh
+
+# Activate the virtual environment
+source venv/bin/activate
+
+# Run the autoclicker
+python autoclicker.py
 ```
 
-### Method 2: Manual Installation
+### Method 2: Direct Installation
 
 ```bash
-# Download the repository as ZIP and extract it
-# Navigate to the extracted directory
+# Clone the repository
+git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
+cd SpeedAutoClicker-Mac
 
-# Install dependencies
-pip3 install -r requirements.txt
+# Install dependencies directly
+pip3 install six pynput==1.7.6 pyobjc-framework-Quartz==9.2 pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-ApplicationServices
 
-# Make the script executable
-chmod +x autoclicker.py
+# Run the autoclicker
+python3 autoclicker.py
 ```
+
+## Troubleshooting
+
+### Module Not Found Errors
+If you encounter "ModuleNotFoundError" for modules like 'six', try installing the missing module:
+
+```bash
+pip3 install six
+```
+
+### Python Version Issues
+This application works best with Python 3.8 or 3.9. If you have multiple Python versions installed, you may need to specify the version:
+
+```bash
+# For Python 3.8
+python3.8 autoclicker.py
+
+# For Python 3.9
+python3.9 autoclicker.py
+```
+
+### Hotkey Setup
+To set a hotkey:
+1. Click the "Set Hotkey" button
+2. Press the key combination you want to use (e.g., Shift+Q)
+3. The hotkey will be displayed in the UI
+4. Use this hotkey to start/stop clicking based on your selected mode
+
+### Accessibility Permissions
+If clicking doesn't work, make sure you've granted accessibility permissions:
+1. Open System Preferences
+2. Go to Security & Privacy > Privacy > Accessibility
+3. Add Terminal or Python to the list of allowed apps
+4. Restart the application
 
 ## Usage
 
-1. Run the application:
-   ```bash
-   python3 autoclicker.py
-   ```
-
-2. Grant accessibility permissions when prompted:
-   - Go to System Preferences > Security & Privacy > Privacy > Accessibility
-   - Add Terminal or Python to the list of allowed applications
-
-3. Configure your settings:
+1. Run the application using one of the installation methods above
+2. Configure your settings:
    - Set your desired click rate (in milliseconds)
    - Adjust the click duty cycle (how long each click is held)
    - Choose which mouse button to simulate
    - Set up your preferred hotkey
    - Select toggle or hold mode
 
-4. Start clicking using either:
+3. Start clicking using either:
    - The "Start" button in the application
    - Your configured hotkey
 
@@ -75,18 +108,6 @@ chmod +x autoclicker.py
 - Example: With 100ms interval and 50% duty cycle:
   - Mouse button is pressed for 50ms
   - Mouse button is released for 50ms
-
-## Troubleshooting
-
-### Accessibility Permissions
-If the auto-clicker doesn't work, make sure you've granted accessibility permissions:
-1. Open System Preferences
-2. Go to Security & Privacy > Privacy > Accessibility
-3. Add Terminal or Python to the list of allowed apps
-4. Restart the application
-
-### Click Not Working in Some Applications
-Some applications may have their own input handling that can interfere with simulated clicks. Try adjusting the click duty cycle or interval.
 
 ## Support
 
