@@ -1,6 +1,6 @@
-# SpeedAutoClicker for macOS
+# SpeedAutoClicker-Mac
 
-An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more. Works on both Intel and Apple Silicon Macs.
+An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more.
 
 ## Features
 
@@ -12,21 +12,12 @@ An advanced auto-clicker for macOS with precise control over click rate, duty cy
 - **Two Activation Modes**:
   - Toggle Mode: Press once to start, again to stop
   - Hold Mode: Click only while the hotkey is held down
-- **Cross-Platform**: Works on both Intel and Apple Silicon Macs
+- **Click Counter**: Track how many clicks have been performed
+- **Compatible with Intel and Apple Silicon Macs**
 
 ## Installation
 
-### Check Your Python Version
-
-To check if you have Python installed and which version:
-
-```bash
-python3 --version
-```
-
-If Python is not installed or the version is below 3.6, you'll need to install/update Python.
-
-### Method 1: Using the Installation Script (Recommended)
+### Method 1: Using the Virtual Environment (Recommended)
 
 ```bash
 # Clone the repository
@@ -37,11 +28,14 @@ cd SpeedAutoClicker-Mac
 chmod +x install.sh
 ./install.sh
 
-# The script will create a launcher that you can use:
-./speedautoclicker
+# Activate the virtual environment
+source venv/bin/activate
+
+# Run the autoclicker
+python autoclicker.py
 ```
 
-### Method 2: Manual Installation
+### Method 2: Direct Installation
 
 ```bash
 # Clone the repository
@@ -49,7 +43,7 @@ git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
 cd SpeedAutoClicker-Mac
 
 # Install dependencies directly
-pip3 install -r requirements.txt
+pip3 install six pynput==1.7.6 pyobjc-framework-Quartz==9.2 pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-ApplicationServices>=9.2
 
 # Run the autoclicker
 python3 autoclicker.py
@@ -57,68 +51,50 @@ python3 autoclicker.py
 
 ## Troubleshooting
 
-### Python Installation Issues
+### Python Not Found
 
-If you don't have Python installed:
+If you see an error about Python not being found, you need to install Python 3:
 
-1. Visit https://www.python.org/downloads/ and download the latest version for macOS
-2. Or install using Homebrew: `brew install python`
+```bash
+# Check if Python is installed
+python3 --version
+
+# If not installed, you can install with Homebrew
+brew install python3
+```
 
 ### Module Not Found Errors
 
-If you encounter "ModuleNotFoundError" for modules like 'pynput' or 'Quartz':
+If you encounter "ModuleNotFoundError" for modules like 'six' or 'pynput':
 
 ```bash
-# Try installing the missing module
-pip3 install pynput pyobjc-framework-Quartz
-
-# If that doesn't work, try installing dependencies one by one
+# Install the missing module
 pip3 install six
 pip3 install pynput==1.7.6
-pip3 install pyobjc-core
-pip3 install pyobjc-framework-Cocoa
-pip3 install pyobjc-framework-ApplicationServices
-pip3 install pyobjc-framework-Quartz
 ```
 
-### Accessibility Permissions
-
-If clicking doesn't work or the app crashes immediately:
-
-1. Open System Preferences
-2. Go to Security & Privacy > Privacy > Accessibility
-3. Click the lock icon to make changes (enter your password)
-4. Add Terminal or Python to the list of allowed apps
-5. Restart the application
-
-You can check if you have the right permissions by running:
+For PyObjC related errors:
 
 ```bash
-# This will attempt to get your mouse position
-python3 -c "from Quartz.CoreGraphics import CGEventCreate, CGEventGetLocation; print(CGEventGetLocation(CGEventCreate(None)))"
+pip3 install pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-Quartz==9.2 pyobjc-framework-ApplicationServices>=9.2
 ```
 
-If it shows coordinates, permissions are working.
+### Python Crashes Immediately
 
-### App Crashes on Launch
+If Python crashes when you try to run the script:
 
-If the app crashes immediately:
-
-1. Try running from Terminal to see error messages:
+1. Make sure you've installed all dependencies correctly
+2. Try running with a specific Python version:
    ```bash
-   cd /path/to/SpeedAutoClicker-Mac
-   python3 autoclicker.py
+   python3.9 autoclicker.py
+   ```
+3. Check if you have accessibility permissions enabled
+4. Try reinstalling the dependencies:
+   ```bash
+   pip3 install --upgrade --force-reinstall -r requirements.txt
    ```
 
-2. Make sure you have the correct Python version (3.6+)
-
-3. Try reinstalling the dependencies:
-   ```bash
-   pip3 uninstall -y pynput pyobjc-framework-Quartz pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-ApplicationServices
-   pip3 install -r requirements.txt
-   ```
-
-### Apple Silicon (M1/M2) Specific Issues
+### Apple Silicon (M1/M2) Mac Issues
 
 If you're using an Apple Silicon Mac and experiencing issues:
 
@@ -127,11 +103,19 @@ If you're using an Apple Silicon Mac and experiencing issues:
    ```bash
    softwareupdate --install-rosetta
    ```
-
-3. Install dependencies with arch flag:
+3. Reinstall the dependencies with the architecture-specific flag:
    ```bash
-   arch -arm64 pip3 install -r requirements.txt
+   pip3 install --upgrade --force-reinstall -r requirements.txt
    ```
+
+### Accessibility Permissions
+
+If clicking doesn't work, make sure you've granted accessibility permissions:
+
+1. Open System Preferences
+2. Go to Security & Privacy > Privacy > Accessibility
+3. Add Terminal or Python to the list of allowed apps
+4. Restart the application
 
 ### Hotkey Setup
 
@@ -141,8 +125,6 @@ To set a hotkey:
 2. Press the key combination you want to use (e.g., Shift+Q)
 3. The hotkey will be displayed in the UI
 4. Use this hotkey to start/stop clicking based on your selected mode
-
-If hotkeys don't work, try using simple key combinations (like a single function key).
 
 ## Understanding Click Settings
 
@@ -157,7 +139,7 @@ If hotkeys don't work, try using simple key combinations (like a single function
 - Example: With 100ms interval and 50% duty cycle:
   - Mouse button is pressed for 50ms
   - Mouse button is released for 50ms
-- For games that need longer click duration, try increasing this value
+- For games that require precise click timing, adjust this value to match the game's requirements
 
 ## Support
 
