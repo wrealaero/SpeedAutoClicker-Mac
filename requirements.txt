@@ -1,6 +1,6 @@
 pynput==1.7.6
-pyobjc-framework-Quartz==9.2
+pyobjc-framework-Quartz>=9.0
+pyobjc-core>=9.0
+pyobjc-framework-Cocoa>=9.0
+pyobjc-framework-ApplicationServices>=9.0
 six>=1.15.0
-pyobjc-core>=9.2
-pyobjc-framework-Cocoa>=9.2
-pyobjc-framework-ApplicationServices>=9.2
