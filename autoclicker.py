@@ -11,6 +11,12 @@ import subprocess
 import sys
 from pynput import keyboard, mouse
 
+try:
+    import updater
+    UPDATER_AVAILABLE = True
+except ImportError:
+    UPDATER_AVAILABLE = False
+
 IS_APPLE_SILICON = platform.machine() == 'arm64'
 
 try:
@@ -127,7 +133,7 @@ class AutoClicker:
 
             ev_up = CGEventCreateMouseEvent(None, up_event, (x, y), button_code)
             CGEventPost(kCGHIDEventTap, ev_up)
-        
+
             time.sleep(max(0.001, release_time))
             
             return True
@@ -313,7 +319,7 @@ class AutoClickerGUI:
         self.clicker.gui = self
         self.root = tk.Tk()
         self.root.title("SpeedAutoClicker")
-        self.root.geometry("400x520")
+        self.root.geometry("400x550") 
         self.root.resizable(False, False)
         self.root.configure(bg="#f0f0f0")
         
@@ -494,23 +500,31 @@ class AutoClickerGUI:
 
         self.counter_thread = threading.Thread(target=self.update_counter, daemon=True)
         self.counter_thread.start()
-        
-        discord_frame = ttk.Frame(self.main_frame)
-        discord_frame.pack(fill="x", pady=(15, 5))
+
+        bottom_frame = ttk.Frame(self.main_frame)
+        bottom_frame.pack(fill="x", pady=(15, 5))
         
         discord_button = ttk.Button(
-            discord_frame, 
+            bottom_frame, 
             text="Join Discord Server",
             command=self.open_discord
         )
         discord_button.pack(side="left")
         
+        if UPDATER_AVAILABLE:
+            update_button = ttk.Button(
+                bottom_frame,
+                text="Check for Updates",
+                command=self.check_for_updates
+            )
+            update_button.pack(side="right")
+        
         contact_label = ttk.Label(
-            discord_frame, 
+            self.main_frame, 
             text="DM 5qvx for bugs and issues :D",
             font=("Arial", 9)
         )
-        contact_label.pack(side="right")
+        contact_label.pack(side="right", pady=(5, 0))
         
         self.interval_var.trace_add("write", self.update_cps_display)
         self.interval_entry.bind("<FocusOut>", self.validate_interval)
@@ -519,8 +533,122 @@ class AutoClickerGUI:
         
         self.toggle_limit_entry()
         self.update_cps_display()
+
+        if UPDATER_AVAILABLE:
+            self.root.after(1000, self.check_for_updates_silently)
         
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+    
+    def check_for_updates_silently(self):
+        """Check for updates without user interaction"""
+        if not UPDATER_AVAILABLE:
+            return
+            
+        try:
+            updates_available, updated_files = updater.check_for_updates(silent=True)
+            if updates_available:
+                response = messagebox.askyesno(
+                    "Update Available",
+                    "A new version of SpeedAutoClicker is available. Would you like to update now?",
+                    parent=self.root
+                )
+                if response:
+                    self.perform_update()
+        except Exception as e:
+            print(f"Error checking for updates: {e}")
+    
+    def check_for_updates(self):
+        """Check for updates with user interaction"""
+        if not UPDATER_AVAILABLE:
+            messagebox.showinfo(
+                "Updates Unavailable",
+                "The updater module is not available. Please reinstall the application.",
+                parent=self.root
+            )
+            return
+            
+        try:
+            updates_available, updated_files = updater.check_for_updates()
+            if updates_available:
+                files_text = "\n".join([f"- {f}" for f in updated_files])
+                response = messagebox.askyesno(
+                    "Update Available",
+                    f"Updates are available for the following files:\n\n{files_text}\n\nWould you like to update now?",
+                    parent=self.root
+                )
+                if response:
+                    self.perform_update()
+            else:
+                messagebox.showinfo(
+                    "No Updates Available",
+                    "You are using the latest version of SpeedAutoClicker.",
+                    parent=self.root
+                )
+        except Exception as e:
+            messagebox.showerror(
+                "Update Error",
+                f"An error occurred while checking for updates:\n\n{str(e)}",
+                parent=self.root
+            )
+    
+    def perform_update(self):
+        """Perform the update process"""
+        try:
+
+            progress_window = tk.Toplevel(self.root)
+            progress_window.title("Updating")
+            progress_window.geometry("300x100")
+            progress_window.transient(self.root)
+            progress_window.grab_set()
+
+            progress_window.update_idletasks()
+            width = progress_window.winfo_width()
+            height = progress_window.winfo_height()
+            x = (progress_window.winfo_screenwidth() // 2) - (width // 2)
+            y = (progress_window.winfo_screenheight() // 2) - (height // 2)
+            progress_window.geometry(f"{width}x{height}+{x}+{y}")
+            
+            label = ttk.Label(
+                progress_window,
+                text="Updating SpeedAutoClicker...\nPlease wait.",
+                font=("Arial", 10),
+                justify="center"
+            )
+            label.pack(pady=20)
+
+            def update_thread():
+                try:
+                    updater.update_application()
+                    progress_window.destroy()
+                    messagebox.showinfo(
+                        "Update Complete",
+                        "SpeedAutoClicker has been updated successfully.\nThe application will now restart.",
+                        parent=self.root
+                    )
+                    self.restart_application()
+                except Exception as e:
+                    progress_window.destroy()
+                    messagebox.showerror(
+                        "Update Failed",
+                        f"An error occurred during the update:\n\n{str(e)}",
+                        parent=self.root
+                    )
+            
+            threading.Thread(target=update_thread, daemon=True).start()
+            
+        except Exception as e:
+            messagebox.showerror(
+                "Update Error",
+                f"An error occurred during the update process:\n\n{str(e)}",
+                parent=self.root
+            )
+    
+    def restart_application(self):
+        """Restart the application after update"""
+        python = sys.executable
+        script = os.path.abspath(__file__)
+        self.root.destroy()
+        os.execl(python, python, script)
     
     def update_counter(self):
         """Update the click counter in a separate thread"""
@@ -666,6 +794,7 @@ class AutoClickerGUI:
 def check_accessibility_permissions():
     """Check if the app has accessibility permissions"""
     try:
+
         ev = CGEventCreate(None)
         CGEventGetLocation(ev)
         return True
@@ -673,6 +802,9 @@ def check_accessibility_permissions():
         return False
 
 def main():
+    root = tk.Tk()
+    root.withdraw()
+
     if sys.version_info < (3, 6):
         messagebox.showerror(
             "Python Version Error",
