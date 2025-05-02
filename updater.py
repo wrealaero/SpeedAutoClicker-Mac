@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# STILL IN BETA - not implanted in main script yet - working on it :D
+
 import os
 import sys
 import json
