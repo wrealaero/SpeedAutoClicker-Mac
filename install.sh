@@ -1,105 +1,112 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+BOLD="\033[1m"
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+RESET="\033[0m"
 
-echo -e "${BLUE}╔════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║          AeroutClicker Installation        ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════╝${NC}"
+echo -e "${BOLD}${BLUE}====================================${RESET}"
+echo -e "${BOLD}${BLUE}     SpeedAutoClicker Installation  ${RESET}"
+echo -e "${BOLD}${BLUE}====================================${RESET}"
+echo
 
-echo -e "${YELLOW}Checking for Python 3...${NC}"
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Python 3 is not installed.${NC}"
-    echo -e "${YELLOW}Would you like to install Python 3 now? (y/n)${NC}"
-    read -r install_python
-    
-    if [[ "$install_python" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Installing Python 3 using Homebrew...${NC}"
-
-        if ! command -v brew &> /dev/null; then
-            echo -e "${YELLOW}Homebrew not found. Installing Homebrew...${NC}"
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        fi
-
-        brew install python
-
-        if ! command -v python3 &> /dev/null; then
-            echo -e "${RED}Failed to install Python 3. Please install it manually and try again.${NC}"
-            echo -e "${YELLOW}Visit https://www.python.org/downloads/ to download Python 3.${NC}"
-            exit 1
-        fi
-    else
-        echo -e "${RED}Python 3 is required to run AeroutClicker.${NC}"
-        echo -e "${YELLOW}Please install Python 3 and try again.${NC}"
-        echo -e "${YELLOW}Visit https://www.python.org/downloads/ to download Python 3.${NC}"
-        exit 1
-    fi
+echo -e "${BOLD}Checking Python installation...${RESET}"
+if command -v python3 &>/dev/null; then
+    PYTHON_VERSION=$(python3 --version)
+    echo -e "${GREEN}✓ Found $PYTHON_VERSION${RESET}"
+else
+    echo -e "${RED}✗ Python 3 not found${RESET}"
+    echo -e "${YELLOW}Please install Python 3 from python.org or using Homebrew:${RESET}"
+    echo "    brew install python"
+    exit 1
 fi
 
-PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
-echo -e "${GREEN}Found Python $PYTHON_VERSION${NC}"
+echo -e "${BOLD}Checking pip installation...${RESET}"
+if python3 -m pip --version &>/dev/null; then
+    PIP_VERSION=$(python3 -m pip --version)
+    echo -e "${GREEN}✓ Found pip${RESET}"
+else
+    echo -e "${RED}✗ pip not found${RESET}"
+    echo -e "${YELLOW}Installing pip...${RESET}"
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    python3 get-pip.py
+    rm get-pip.py
+fi
 
-echo -e "${YELLOW}Creating virtual environment...${NC}"
-python3 -m venv venv 2>/dev/null
+echo -e "${BOLD}Checking virtualenv...${RESET}"
+if python3 -m pip show virtualenv &>/dev/null; then
+    echo -e "${GREEN}✓ virtualenv is installed${RESET}"
+else
+    echo -e "${YELLOW}Installing virtualenv...${RESET}"
+    python3 -m pip install virtualenv
+fi
 
+IS_APPLE_SILICON=false
+if [[ $(uname -m) == "arm64" ]]; then
+    IS_APPLE_SILICON=true
+    echo -e "${BLUE}ℹ Detected Apple Silicon Mac${RESET}"
+fi
+
+echo -e "${BOLD}Setting up virtual environment...${RESET}"
 if [ -d "venv" ]; then
-    echo -e "${GREEN}Virtual environment created successfully.${NC}"
-    echo -e "${YELLOW}Activating virtual environment...${NC}"
-    source venv/bin/activate
+    echo -e "${YELLOW}ℹ Existing virtual environment found. Recreating...${RESET}"
+    rm -rf venv
+fi
 
-    if [ "$VIRTUAL_ENV" != "" ]; then
-        echo -e "${GREEN}Virtual environment activated.${NC}"
-    else
-        echo -e "${YELLOW}Could not activate virtual environment. Continuing with system Python...${NC}"
+python3 -m virtualenv venv
+if [ $? -ne 0 ]; then
+    echo -e "${RED}✗ Failed to create virtual environment${RESET}"
+    echo -e "${YELLOW}Trying alternative method...${RESET}"
+    python3 -m venv venv
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ Failed to create virtual environment using venv${RESET}"
+        echo -e "${YELLOW}Installing dependencies globally...${RESET}"
+        python3 -m pip install -r requirements.txt
     fi
 else
-    echo -e "${YELLOW}Virtual environment creation failed. Continuing with system Python...${NC}"
+    echo -e "${GREEN}✓ Virtual environment created${RESET}"
+    source venv/bin/activate
+    echo -e "${BOLD}Installing dependencies...${RESET}"
+    if [ "$IS_APPLE_SILICON" = true ]; then
+        echo -e "${BLUE}ℹ Using Apple Silicon specific installation${RESET}"
+        pip install six
+        pip install pynput==1.7.6
+        pip install pyobjc-framework-Quartz==9.2 pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-ApplicationServices>=9.2
+    else
+        pip install -r requirements.txt
+    fi
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ Failed to install dependencies${RESET}"
+        echo -e "${YELLOW}Please try installing them manually:${RESET}"
+        echo "    pip install -r requirements.txt"
+    else
+        echo -e "${GREEN}✓ Dependencies installed successfully${RESET}"
+    fi
 fi
 
-echo -e "${YELLOW}Installing dependencies...${NC}"
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
-
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}Dependencies installed successfully.${NC}"
-else
-    echo -e "${RED}Failed to install some dependencies.${NC}"
-    echo -e "${YELLOW}Trying alternative installation method...${NC}"
-
-    python3 -m pip install six
-    python3 -m pip install pynput==1.7.6
-    python3 -m pip install pyobjc-framework-Quartz==9.2
-    python3 -m pip install pyobjc-core
-    python3 -m pip install pyobjc-framework-Cocoa
-    python3 -m pip install pyobjc-framework-ApplicationServices
-    
-    echo -e "${YELLOW}Alternative installation completed. Some features may not work correctly.${NC}"
-fi
-
-echo -e "${YELLOW}Setting permissions...${NC}"
+echo -e "${BOLD}Making scripts executable...${RESET}"
 chmod +x autoclicker.py
 chmod +x updater.py
+echo -e "${GREEN}✓ Scripts are now executable${RESET}"
 
-echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║           Installation Complete!           ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
+echo -e "${BOLD}Checking accessibility permissions...${RESET}"
+echo -e "${YELLOW}ℹ SpeedAutoClicker requires accessibility permissions to function properly.${RESET}"
+echo -e "${YELLOW}ℹ You may be prompted to grant these permissions when you first run the app.${RESET}"
 
-echo -e "${YELLOW}To run AeroutClicker:${NC}"
-if [ -d "venv" ]; then
-    echo -e "${BLUE}source venv/bin/activate${NC}"
-fi
-echo -e "${BLUE}python3 autoclicker.py${NC}"
-
-echo -e "${YELLOW}Note: You may need to grant accessibility permissions to use AeroutClicker.${NC}"
-echo -e "${YELLOW}Go to System Preferences > Security & Privacy > Privacy > Accessibility${NC}"
-echo -e "${YELLOW}and add Terminal or the Python application to the list of allowed apps.${NC}"
-
-echo -e "${YELLOW}Would you like to run AeroutClicker now? (y/n)${NC}"
-read -r run_now
-
-if [[ "$run_now" =~ ^[Yy]$ ]]; then
-    python3 autoclicker.py
-fi
+echo
+echo -e "${BOLD}${GREEN}Installation complete!${RESET}"
+echo
+echo -e "${BOLD}To run SpeedAutoClicker:${RESET}"
+echo -e "1. Activate the virtual environment:${RESET}"
+echo -e "   ${BLUE}source venv/bin/activate${RESET}"
+echo
+echo -e "2. Run the application:${RESET}"
+echo -e "   ${BLUE}./autoclicker.py${RESET}"
+echo -e "   or"
+echo -e "   ${BLUE}python3 autoclicker.py${RESET}"
+echo
+echo -e "${BOLD}${BLUE}====================================${RESET}"
+echo -e "${BOLD}${BLUE}  Thank you for using SpeedAutoClicker!${RESET}"
+echo -e "${BOLD}${BLUE}====================================${RESET}"
