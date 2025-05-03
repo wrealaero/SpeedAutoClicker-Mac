@@ -1,377 +1,461 @@
 #!/usr/bin/env python3
 import os
+import sys
 import json
 import time
 import threading
-import tkinter as tk
-from tkinter import ttk, font, messagebox
 import webbrowser
 import subprocess
-import sys
-from pynput import keyboard, mouse
-from Quartz.CoreGraphics import (
-    CGEventCreateMouseEvent, CGEventPost, CGEventCreate, CGEventGetLocation,
-    kCGEventLeftMouseDown, kCGEventLeftMouseUp, kCGEventRightMouseDown, 
-    kCGEventRightMouseUp, kCGEventOtherMouseDown, kCGEventOtherMouseUp,
-    kCGMouseButtonLeft, kCGMouseButtonRight, kCGMouseButtonCenter, kCGHIDEventTap
-)
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime
 
-SETTINGS_PATH = os.path.expanduser("~/.aeroutclicker_settings.json")
+try:
+    from Quartz import (
+        CGEventCreate, CGEventGetLocation, CGEventCreateMouseEvent,
+        CGEventPost, kCGEventLeftMouseDown, kCGEventLeftMouseUp,
+        kCGEventRightMouseDown, kCGEventRightMouseUp,
+        kCGEventOtherMouseDown, kCGEventOtherMouseUp,
+        kCGMouseButtonLeft, kCGMouseButtonRight, kCGMouseButtonCenter,
+        kCGHIDEventTap
+    )
+    from pynput import keyboard
+    import objc
+except ImportError as e:
+    print(f"Error importing required modules: {e}")
+    print("Please make sure you have the required dependencies installed.")
+    print("Run: pip3 install -r requirements.txt")
+    sys.exit(1)
+
 VERSION = "1.0.0"
+SETTINGS_FILE = os.path.expanduser("~/.speedautoclicker.json")
 DISCORD_URL = "https://discord.gg/MxGV8fGzpR"
-GITHUB_REPO = "https://api.github.com/repos/wrealaero/SpeedAutoClicker-Mac/commits/main"
+GITHUB_REPO = "https://api.github.com/repos/wrealaero/SpeedAutoClicker-Mac"
+
+DEFAULT_SETTINGS = {
+    "interval_ms": 100.0,
+    "duty_cycle": 50.0,
+    "mouse_button": "left",
+    "mode": "toggle",
+    "limit_enabled": False,
+    "click_limit": 100,
+    "hotkey": {
+        "type": "keyboard",
+        "keys": ["shift", "q"]
+    }
+}
 
 def load_settings():
-    defaults = {
-        "interval_ms": 100.0, 
-        "duty_cycle": 50.0,
-        "click_limit": 0,         
-        "limit_enabled": False,
-        "mouse_button": "left",
-        "mode": "toggle",       
-        "hotkey": {"type": "keyboard", "keys": ["f6"]}
-    }
-    
-    if os.path.exists(SETTINGS_PATH):
-        try:
-            with open(SETTINGS_PATH, 'r') as f:
-                user_settings = json.load(f)
-                defaults.update(user_settings)
-        except Exception:
-            pass
-    
-    return defaults
+    """Load settings from file or return defaults"""
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, 'r') as f:
+                settings = json.load(f)
+                for key, value in DEFAULT_SETTINGS.items():
+                    if key not in settings:
+                        settings[key] = value
+                return settings
+        return DEFAULT_SETTINGS.copy()
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+        return DEFAULT_SETTINGS.copy()
 
 def save_settings(settings):
+    """Save settings to file"""
     try:
-        with open(SETTINGS_PATH, 'w') as f:
-            json.dump(settings, f)
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=4)
     except Exception as e:
         print(f"Error saving settings: {e}")
 
+class MouseController:
+    """Handles mouse clicking using Quartz CGEvent API"""
+    
+    def __init__(self):
+        self.button_map = {
+            "left": (kCGEventLeftMouseDown, kCGEventLeftMouseUp, kCGMouseButtonLeft),
+            "right": (kCGEventRightMouseDown, kCGEventRightMouseUp, kCGMouseButtonRight),
+            "middle": (kCGEventOtherMouseDown, kCGEventOtherMouseUp, kCGMouseButtonCenter)
+        }
+        
+    def get_current_position(self):
+        """Get current mouse position"""
+        event = CGEventCreate(None)
+        return CGEventGetLocation(event)
+    
+    def click(self, button="left", hold_time=0.05):
+        """
+        Perform a mouse click at the current position
+        
+        Args:
+            button: Mouse button to click ("left", "right", "middle")
+            hold_time: How long to hold the button down in seconds
+        """
+        try:
+            position = self.get_current_position()
+
+            down_event, up_event, button_code = self.button_map.get(
+                button, self.button_map["left"])
+
+            event_down = CGEventCreateMouseEvent(
+                None, down_event, position, button_code)
+            CGEventPost(kCGHIDEventTap, event_down)
+
+            time.sleep(hold_time)
+
+            event_up = CGEventCreateMouseEvent(
+                None, up_event, position, button_code)
+            CGEventPost(kCGHIDEventTap, event_up)
+
+            time.sleep(0.001)
+            
+            return True
+        except Exception as e:
+            print(f"Click error: {e}")
+            return False
+
+class HotkeyManager:
+    """Manages hotkey detection and handling"""
+    
+    def __init__(self, callback):
+        self.callback = callback
+        self.listener = None
+        self.current_keys = set()
+        self.hotkey_keys = []
+        self.capturing = False
+        self.capture_callback = None
+        self.is_active = False
+        
+    def start_listener(self):
+        """Start the keyboard listener"""
+        if self.listener is None or not self.listener.is_alive():
+            try:
+                self.listener = keyboard.Listener(
+                    on_press=self._on_press,
+                    on_release=self._on_release)
+                self.listener.daemon = True
+                self.listener.start()
+            except Exception as e:
+                print(f"Error starting keyboard listener: {e}")
+    
+    def stop_listener(self):
+        """Stop the keyboard listener"""
+        if self.listener and self.listener.is_alive():
+            self.listener.stop()
+            self.listener = None
+    
+    def set_hotkey(self, keys):
+        """Set the hotkey to detect"""
+        self.hotkey_keys = [k.lower() for k in keys]
+    
+    def start_capture(self, callback):
+        """Start capturing a new hotkey"""
+        self.capturing = True
+        self.capture_callback = callback
+        self.current_keys.clear()
+    
+    def stop_capture(self):
+        """Stop capturing a new hotkey"""
+        self.capturing = False
+        self.capture_callback = None
+    
+    def _on_press(self, key):
+        """Handle key press events"""
+        try:
+            if hasattr(key, 'char') and key.char:
+                key_str = key.char.lower()
+            elif hasattr(key, 'name'):
+                key_str = key.name.lower()
+            else:
+                key_str = str(key).lower().replace("'", "")
+                if key_str.startswith("key."):
+                    key_str = key_str[4:]
+
+            self.current_keys.add(key_str)
+
+            if self.capturing and self.capture_callback:
+                if len(self.current_keys) > 0:
+                    self.capture_callback(list(self.current_keys))
+                return
+
+            if set(self.hotkey_keys).issubset(self.current_keys):
+                self.callback()
+        except Exception as e:
+            print(f"Key press error: {e}")
+    
+    def _on_release(self, key):
+        """Handle key release events"""
+        try:
+            if hasattr(key, 'char') and key.char:
+                key_str = key.char.lower()
+            elif hasattr(key, 'name'):
+                key_str = key.name.lower()
+            else:
+                key_str = str(key).lower().replace("'", "")
+                if key_str.startswith("key."):
+                    key_str = key_str[4:]
+
+            if key_str in self.current_keys:
+                self.current_keys.remove(key_str)
+
+            if self.capturing and len(self.current_keys) == 0:
+                self.stop_capture()
+        except Exception as e:
+            print(f"Key release error: {e}")
+
 class AutoClicker:
+    """Main auto-clicker class"""
+    
     def __init__(self):
         self.settings = load_settings()
+        self.mouse = MouseController()
+        self.hotkey_manager = HotkeyManager(self.handle_hotkey)
+        
         self.clicking = False
         self.click_thread = None
-        self.click_count = 0
-        self.current_keys = set()
-        self.capturing_hotkey = False
-        self.capture_keys = set()
-        self.last_combo = set()
-        self.overlay = None
-
-        self.kb_listener = keyboard.Listener(
-            on_press=self.on_key_press, 
-            on_release=self.on_key_release, 
-            daemon=True
-        )
-        self.kb_listener.start()
-
-        self.mouse_listener = mouse.Listener(
-            on_click=self.on_mouse_click, 
-            daemon=True
-        )
-        self.mouse_listener.start()
-    
-    def get_mouse_position(self):
-        ev = CGEventCreate(None)
-        loc = CGEventGetLocation(ev)
-        return loc.x, loc.y
-    
-    def mouse_click(self, button="left"):
-        """Perform a mouse click with precise duty cycle control"""
-        x, y = self.get_mouse_position()
-
-        if button == "left":
-            down_event = kCGEventLeftMouseDown
-            up_event = kCGEventLeftMouseUp
-            button_code = kCGMouseButtonLeft
-        elif button == "right":
-            down_event = kCGEventRightMouseDown
-            up_event = kCGEventRightMouseUp
-            button_code = kCGMouseButtonRight
-        elif button == "middle":
-            down_event = kCGEventOtherMouseDown
-            up_event = kCGEventOtherMouseUp
-            button_code = kCGMouseButtonCenter
-        else:
-            down_event = kCGEventLeftMouseDown
-            up_event = kCGEventLeftMouseUp
-            button_code = kCGMouseButtonLeft
-
-        interval_ms = float(self.settings["interval_ms"])
-        duty_cycle = float(self.settings["duty_cycle"])
-
-        interval_sec = interval_ms / 1000.0
-
-        hold_time = interval_sec * (duty_cycle / 100.0)
-        release_time = interval_sec - hold_time
-
-        ev_down = CGEventCreateMouseEvent(None, down_event, (x, y), button_code)
-        CGEventPost(kCGHIDEventTap, ev_down)
-        
-        time.sleep(max(0.001, hold_time))
-
-        ev_up = CGEventCreateMouseEvent(None, up_event, (x, y), button_code)
-        CGEventPost(kCGHIDEventTap, ev_up)
-
-        time.sleep(max(0.001, release_time))
-        
-        return True
-    
-    def click_loop(self):
-        """Main clicking loop with limit support"""
-        limit = int(self.settings["click_limit"]) if self.settings["limit_enabled"] else 0
+        self.stop_event = threading.Event()
         self.click_count = 0
         
+        self.gui = None
+
+        self.hotkey_manager.set_hotkey(self.settings["hotkey"]["keys"])
+        self.hotkey_manager.start_listener()
+    
+    def handle_hotkey(self):
+        """Handle hotkey press based on mode"""
+        if self.settings["mode"] == "toggle":
+            self.toggle_clicking()
+        elif self.settings["mode"] == "hold":
+            if not self.clicking:
+                self.start_clicking()
+                threading.Thread(target=self._monitor_hold_key, daemon=True).start()
+    
+    def _monitor_hold_key(self):
+        """Monitor if hotkey is still held down in hold mode"""
         while self.clicking:
-            self.click_count += 1
-            self.mouse_click(self.settings["mouse_button"])
-
-            if limit > 0 and self.click_count >= limit:
-                self.clicking = False
-                if hasattr(self, 'gui'):
-                    self.gui.update_status("Stopped (Limit reached)")
-                    self.gui.toggle_button.config(text="Start")
+            if not set(self.settings["hotkey"]["keys"]).issubset(self.hotkey_manager.current_keys):
+                self.stop_clicking()
                 break
-
-    def start_clicking(self):
-        """Start the clicking process"""
-        if not self.clicking:
-            self.clicking = True
-            self.click_thread = threading.Thread(target=self.click_loop, daemon=True)
-            self.click_thread.start()
-            
-            if hasattr(self, 'gui'):
-                self.gui.update_status("Clicking...")
-                self.gui.toggle_button.config(text="Stop")
-
-    def stop_clicking(self):
-        """Stop the clicking process"""
-        self.clicking = False
-        if hasattr(self, 'gui'):
-            self.gui.update_status("Stopped")
-            self.gui.toggle_button.config(text="Start")
-
+            time.sleep(0.05)
+    
     def toggle_clicking(self):
-        """Toggle between clicking and not clicking"""
+        """Toggle clicking on/off"""
         if self.clicking:
             self.stop_clicking()
         else:
             self.start_clicking()
-
-    def on_key_press(self, key):
-        """Handle key press events"""
-        if self.capturing_hotkey:
-            try:
-                if hasattr(key, 'char') and key.char:
-                    name = key.char.lower()
-                else:
-                    name = key.name.lower() if hasattr(key, 'name') else str(key).lower().replace("key.", "")
-                
-                self.capture_keys.add(name)
-                self.last_combo = self.capture_keys.copy()
-            except AttributeError:
-                pass
-            return
-
-        try:
-            if hasattr(key, 'char') and key.char:
-                name = key.char.lower()
-            else:
-                name = key.name.lower() if hasattr(key, 'name') else str(key).lower().replace("key.", "")
-            
-            self.current_keys.add(name)
-            
-            if self.settings["hotkey"]["type"] == "keyboard":
-                hotkey_keys = set(self.settings["hotkey"]["keys"])
-                if hotkey_keys and hotkey_keys.issubset(self.current_keys):
-                    if self.settings["mode"] == "toggle":
-                        self.toggle_clicking()
-                    else: 
-                        self.start_clicking()
-        except AttributeError:
-            pass
-
-    def on_key_release(self, key):
-        """Handle key release events"""
-        if self.capturing_hotkey:
-            try:
-                if hasattr(key, 'char') and key.char:
-                    name = key.char.lower()
-                else:
-                    name = key.name.lower() if hasattr(key, 'name') else str(key).lower().replace("key.", "")
-                
-                self.capture_keys.discard(name)
-                
-                if not self.capture_keys and self.last_combo:
-                    self.settings["hotkey"] = {
-                        "type": "keyboard", 
-                        "keys": sorted(list(self.last_combo))
-                    }
-                    save_settings(self.settings)
-                    self.capturing_hotkey = False
-                    
-                    if self.overlay:
-                        self.overlay.destroy()
-                        self.overlay = None
-                    
-                    if hasattr(self, 'gui'):
-                        self.gui.update_hotkey_display()
-            except AttributeError:
-                pass
-            return
-
-        try:
-            if hasattr(key, 'char') and key.char:
-                name = key.char.lower()
-            else:
-                name = key.name.lower() if hasattr(key, 'name') else str(key).lower().replace("key.", "")
-            
-            self.current_keys.discard(name)
-            
-            if (self.settings["mode"] == "hold" and 
-                self.settings["hotkey"]["type"] == "keyboard"):
-                
-                hotkey_keys = set(self.settings["hotkey"]["keys"])
-                if not hotkey_keys.issubset(self.current_keys):
-                    self.stop_clicking()
-        except AttributeError:
-            pass
-
-    def on_mouse_click(self, x, y, button, pressed):
-        """Handle mouse click events"""
-        button_name = button.name if hasattr(button, 'name') else str(button)
-
-        if self.clicking and button_name == self.settings["mouse_button"]:
+    
+    def start_clicking(self):
+        """Start auto-clicking"""
+        if self.clicking:
             return
         
-        if self.settings["hotkey"]["type"] == "mouse" and button_name == self.settings["hotkey"]["button"]:
-            if self.settings["mode"] == "toggle" and pressed:
-                self.toggle_clicking()
-            elif self.settings["mode"] == "hold":
-                if pressed:
-                    self.start_clicking()
-                else:
-                    self.stop_clicking()
+        self.clicking = True
+        self.stop_event.clear()
+        self.click_count = 0
 
+        if self.gui:
+            self.gui.toggle_button.config(text="Stop")
+            self.gui.update_status("Running")
+
+        self.click_thread = threading.Thread(target=self._clicking_loop, daemon=True)
+        self.click_thread.start()
+    
+    def stop_clicking(self):
+        """Stop auto-clicking"""
+        if not self.clicking:
+            return
+        
+        self.clicking = False
+        self.stop_event.set()
+
+        if self.click_thread and self.click_thread.is_alive():
+            self.click_thread.join(timeout=1.0)
+
+        if self.gui:
+            self.gui.toggle_button.config(text="Start")
+            self.gui.update_status(f"Stopped (Clicks: {self.click_count})")
+    
+    def _clicking_loop(self):
+        """Main clicking loop"""
+        try:
+            interval_ms = float(self.settings["interval_ms"])
+            duty_cycle = float(self.settings["duty_cycle"]) / 100.0
+            button = self.settings["mouse_button"]
+            limit_enabled = self.settings["limit_enabled"]
+            click_limit = int(self.settings["click_limit"])
+
+            if interval_ms < 10:
+                interval_ms = 10
+
+            hold_time = (interval_ms / 1000.0) * duty_cycle
+
+            if hold_time < 0.001:
+                hold_time = 0.001
+            elif hold_time > (interval_ms / 1000.0) - 0.001:
+                hold_time = (interval_ms / 1000.0) - 0.001
+
+            while self.clicking and not self.stop_event.is_set():
+                success = self.mouse.click(button, hold_time)
+                
+                if success:
+                    self.click_count += 1
+
+                    if self.gui and self.click_count % 10 == 0:
+                        self.gui.update_status(f"Running (Clicks: {self.click_count})")
+
+                    if limit_enabled and self.click_count >= click_limit:
+                        self.clicking = False
+                        if self.gui:
+                            self.gui.root.after(0, self.stop_clicking)
+                        break
+
+                wait_time = (interval_ms / 1000.0) - hold_time
+                if wait_time > 0:
+                    wait_start = time.time()
+                    while time.time() - wait_start < wait_time:
+                        if self.stop_event.is_set():
+                            break
+                        time.sleep(min(0.01, wait_time))
+        
+        except Exception as e:
+            print(f"Clicking error: {e}")
+            if self.gui:
+                self.gui.root.after(0, lambda: self.gui.update_status(f"Error: {str(e)}"))
+                self.gui.root.after(0, self.stop_clicking)
+    
     def start_hotkey_capture(self):
         """Start capturing a new hotkey"""
-        if self.capturing_hotkey:
+        if self.gui:
+            self.gui.update_status("Press hotkey combination...")
+            self.hotkey_manager.start_capture(self._hotkey_captured)
+    
+    def _hotkey_captured(self, keys):
+        """Handle captured hotkey"""
+        if not keys:
             return
-        
-        self.capturing_hotkey = True
-        self.capture_keys = set()
-        self.last_combo = set()
-        
-        if hasattr(self, 'gui'):
-            self.overlay = tk.Toplevel(self.gui.root)
-            self.overlay.attributes("-topmost", True)
-            self.overlay.geometry("400x200")
-            self.overlay.title("Capturing Hotkey")
-            self.overlay.update_idletasks()
-            
-            width = self.overlay.winfo_width()
-            height = self.overlay.winfo_height()
-            x = (self.overlay.winfo_screenwidth() // 2) - (width // 2)
-            y = (self.overlay.winfo_screenheight() // 2) - (height // 2)
-            self.overlay.geometry(f"{width}x{height}+{x}+{y}")
-            
-            self.overlay.configure(bg="#333333")
-            
-            label = tk.Label(
-                self.overlay,
-                text="Press key combination for hotkey\n(Press and release keys)",
-                font=("Arial", 14),
-                fg="white",
-                bg="#333333",
-                pady=20
-            )
-            label.pack(fill="both", expand=True)
-            
-            cancel_btn = tk.Button(
-                self.overlay,
-                text="Cancel",
-                command=self.cancel_hotkey_capture,
-                bg="#FF5555",
-                fg="white",
-                padx=10,
-                pady=5
-            )
-            cancel_btn.pack(pady=20)
 
-    def cancel_hotkey_capture(self):
-        """Cancel the hotkey capture process"""
-        self.capturing_hotkey = False
-        if self.overlay:
-            self.overlay.destroy()
-            self.overlay = None
+        self.settings["hotkey"]["type"] = "keyboard"
+        self.settings["hotkey"]["keys"] = keys
+
+        self.hotkey_manager.set_hotkey(keys)
+
+        if self.gui:
+            self.gui.update_hotkey_display()
+            self.gui.update_status("Hotkey set successfully")
+
+        save_settings(self.settings)
 
 class AutoClickerGUI:
+    """GUI for the auto-clicker"""
+    
     def __init__(self, clicker):
         self.clicker = clicker
         self.clicker.gui = self
-        
+
         self.root = tk.Tk()
-        self.root.title("AeroutClicker")
-        self.root.geometry("400x520")
+        self.root.title(f"SpeedAutoClicker v{VERSION}")
+        self.root.geometry("500x600")
         self.root.resizable(False, False)
-        self.root.configure(bg="#f0f0f0")
-        
+
         try:
-            self.root.iconbitmap("icon.ico")
-        except:
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+            if os.path.exists(icon_path):
+                icon = tk.PhotoImage(file=icon_path)
+                self.root.iconphoto(True, icon)
+        except Exception:
             pass
 
         self.style = ttk.Style()
-        self.style.configure("TButton", font=("Arial", 10))
-        self.style.configure("TLabel", font=("Arial", 10), background="#f0f0f0")
-        self.style.configure("TFrame", background="#f0f0f0")
-        self.style.configure("TRadiobutton", font=("Arial", 10), background="#f0f0f0")
+        self.style.configure("TFrame", padding=5)
+        self.style.configure("TLabel", padding=2)
+        self.style.configure("TButton", padding=5)
+        self.style.configure("Header.TLabel", font=("Arial", 12, "bold"))
+        self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), padding=10)
 
-        self.main_frame = ttk.Frame(self.root, padding=15)
-        self.main_frame.pack(fill="both", expand=True)
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        title_frame = ttk.Frame(self.main_frame)
-        title_frame.pack(fill="x", pady=(0, 15))
+        canvas = tk.Canvas(main_container)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        self.main_frame = ttk.Frame(canvas)
+        canvas_window = canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
+
+        def configure_scroll_region(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        def configure_canvas_width(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        
+        self.main_frame.bind("<Configure>", configure_scroll_region)
+        canvas.bind("<Configure>", configure_canvas_width)
+
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", on_mousewheel)  # Windows/macOS
+        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))  # Linux
+        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))  # Linux
 
         title_label = ttk.Label(
-            title_frame, 
-            text="AeroutClicker",
-            font=("Arial", 16, "bold")
+            self.main_frame, 
+            text="SpeedAutoClicker",
+            style="Title.TLabel"
         )
-        title_label.pack(side="top", anchor="center")
+        title_label.pack(fill="x", pady=(0, 10))
+
+        version_frame = ttk.Frame(self.main_frame)
+        version_frame.pack(fill="x", pady=(0, 10))
         
         version_label = ttk.Label(
-            title_frame, 
-            text=f"v{VERSION}",
-            font=("Arial", 8)
+            version_frame, 
+            text=f"Version {VERSION}",
+            font=("Arial", 9, "italic")
         )
-        version_label.pack(side="right", padx=5, pady=5)
+        version_label.pack(side="left")
 
-        self.create_section_label("Click Rate (CPS)")
+        self.create_section_label("Click Interval")
         
-        rate_frame = ttk.Frame(self.main_frame)
-        rate_frame.pack(fill="x", pady=5)
+        interval_frame = ttk.Frame(self.main_frame)
+        interval_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(interval_frame, text="Interval:").pack(side="left")
         
         self.interval_var = tk.StringVar(value=str(self.clicker.settings["interval_ms"]))
-        self.interval_entry = ttk.Entry(rate_frame, textvariable=self.interval_var, width=10)
-        self.interval_entry.pack(side="left", padx=(0, 5))
+        self.interval_entry = ttk.Entry(interval_frame, textvariable=self.interval_var, width=10)
+        self.interval_entry.pack(side="left", padx=(5, 5))
         
-        ttk.Label(rate_frame, text="ms").pack(side="left")
+        ttk.Label(interval_frame, text="ms").pack(side="left")
         
-        self.cps_label = ttk.Label(rate_frame, text="= 10.00 CPS")
-        self.cps_label.pack(side="right")
+        self.cps_label = ttk.Label(interval_frame, text="= 0.00 CPS")
+        self.cps_label.pack(side="left", padx=(10, 0))
 
-        self.create_section_label("Click Duty Cycle (CDC)")
+        self.create_section_label("Click Duty Cycle")
+        
+        duty_info_frame = ttk.Frame(self.main_frame)
+        duty_info_frame.pack(fill="x", pady=(0, 5))
+        
+        duty_info = ttk.Label(
+            duty_info_frame, 
+            text="Controls how long each click is held down (as % of interval)",
+            font=("Arial", 9, "italic"),
+            wraplength=450
+        )
+        duty_info.pack(anchor="w")
         
         duty_frame = ttk.Frame(self.main_frame)
         duty_frame.pack(fill="x", pady=5)
         
+        ttk.Label(duty_frame, text="Duty Cycle:").pack(side="left")
+        
         self.duty_var = tk.StringVar(value=str(self.clicker.settings["duty_cycle"]))
         self.duty_entry = ttk.Entry(duty_frame, textvariable=self.duty_var, width=10)
-        self.duty_entry.pack(side="left", padx=(0, 5))
+        self.duty_entry.pack(side="left", padx=(5, 5))
         
         ttk.Label(duty_frame, text="%").pack(side="left")
 
@@ -462,12 +546,11 @@ class AutoClickerGUI:
             control_frame, 
             text="Start",
             command=self.clicker.toggle_clicking,
-            style="TButton",
             width=20
         )
         self.toggle_button.pack(pady=5)
         
-        self.status_var = tk.StringVar(value="Stopped")
+        self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(
             control_frame, 
             textvariable=self.status_var,
@@ -481,6 +564,13 @@ class AutoClickerGUI:
             command=self.check_for_updates
         )
         update_button.pack(pady=5)
+
+        diagnostics_button = ttk.Button(
+            control_frame,
+            text="Run Diagnostics",
+            command=self.run_diagnostics
+        )
+        diagnostics_button.pack(pady=5)
 
         discord_frame = ttk.Frame(self.main_frame)
         discord_frame.pack(fill="x", pady=(15, 5))
@@ -517,7 +607,7 @@ class AutoClickerGUI:
         label = ttk.Label(
             frame, 
             text=text,
-            font=("Arial", 11, "bold")
+            style="Header.TLabel"
         )
         label.pack(anchor="w")
         
@@ -529,7 +619,7 @@ class AutoClickerGUI:
         try:
             interval_ms = float(self.interval_var.get())
             if interval_ms <= 0:
-                interval_ms = 1.0
+                interval_ms = 10.0
                 
             cps = 1000.0 / interval_ms
             self.cps_label.config(text=f"= {cps:.2f} CPS")
@@ -542,12 +632,13 @@ class AutoClickerGUI:
         """Validate the interval input"""
         try:
             value = float(self.interval_var.get())
-            if value <= 0:
-                self.interval_var.set("1.0")
-                self.clicker.settings["interval_ms"] = 1.0
+            if value < 10:
+                self.interval_var.set("10.0")
+                self.clicker.settings["interval_ms"] = 10.0
             else:
                 self.clicker.settings["interval_ms"] = value
             save_settings(self.clicker.settings)
+            self.update_cps_display()
         except ValueError:
             self.interval_var.set(str(self.clicker.settings["interval_ms"]))
     
@@ -555,7 +646,7 @@ class AutoClickerGUI:
         """Validate the duty cycle input"""
         try:
             value = float(self.duty_var.get())
-            if value < 0 or value > 100:
+            if value < 1 or value > 99:
                 self.duty_var.set("50.0")
                 self.clicker.settings["duty_cycle"] = 50.0
             else:
@@ -568,9 +659,9 @@ class AutoClickerGUI:
         """Validate the click limit input"""
         try:
             value = int(self.limit_var.get())
-            if value < 0:
-                self.limit_var.set("0")
-                self.clicker.settings["click_limit"] = 0
+            if value < 1:
+                self.limit_var.set("100")
+                self.clicker.settings["click_limit"] = 100
             else:
                 self.clicker.settings["click_limit"] = value
             save_settings(self.clicker.settings)
@@ -613,15 +704,17 @@ class AutoClickerGUI:
                     formatted_keys.append("⌥ Alt")
                 elif key == "cmd" or key == "command":
                     formatted_keys.append("⌘ Cmd")
+                elif key == "space":
+                    formatted_keys.append("Space")
                 else:
                     formatted_keys.append(key.upper())
-                
+            
             return " + ".join(formatted_keys)
-        else:
-            return f"Mouse: {hotkey.get('button', 'left').upper()}"
+        
+        return "No hotkey set"
     
     def update_hotkey_display(self):
-        """Update the hotkey display label"""
+        """Update the hotkey display"""
         self.hotkey_display.config(text=self.format_hotkey_display())
     
     def update_status(self, text):
@@ -630,87 +723,157 @@ class AutoClickerGUI:
     
     def open_discord(self):
         """Open the Discord server link"""
-        webbrowser.open(DISCORD_URL)
+        try:
+            webbrowser.open(DISCORD_URL)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open Discord link: {str(e)}")
     
     def check_for_updates(self):
-        """Check for updates from GitHub"""
-        try:
-            import urllib.request
-            import json
+        """Check for updates and prompt to install if available"""
+        self.update_status("Checking for updates...")
 
-            update_dialog = tk.Toplevel(self.root)
-            update_dialog.title("Checking for Updates")
-            update_dialog.geometry("300x100")
-            update_dialog.transient(self.root)
-            update_dialog.grab_set()
-            
-            status_label = ttk.Label(update_dialog, text="Checking for updates...", padding=20)
-            status_label.pack()
-            
-            progress = ttk.Progressbar(update_dialog, mode="indeterminate")
-            progress.pack(fill="x", padx=20)
-            progress.start()
-            
-            update_dialog.update()
-
-            def check_update_thread():
-                try:
-                    req = urllib.request.Request(GITHUB_REPO)
-                    req.add_header('User-Agent', 'AeroutClicker')
-                    with urllib.request.urlopen(req, timeout=5) as response:
-                        data = json.loads(response.read().decode())
-                        
-                    latest_commit = data.get('sha', '')
-                    last_commit_file = os.path.expanduser("~/.aeroutclicker_lastcommit")
-                    last_commit = ""
-                    if os.path.exists(last_commit_file):
-                        with open(last_commit_file, 'r') as f:
-                            last_commit = f.read().strip()
-
-                    if latest_commit and latest_commit != last_commit:
-                        with open(last_commit_file, 'w') as f:
-                            f.write(latest_commit)
-                            
-                        self.root.after(0, lambda: self.show_update_available())
-                    else:
-                        self.root.after(0, lambda: messagebox.showinfo(
-                            "Up to Date", 
-                            "You are using the latest version of AeroutClicker!"
-                        ))
-                    self.root.after(0, update_dialog.destroy)
-                    
-                except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        "Update Check Failed", 
-                        f"Could not check for updates: {str(e)}"
-                    ))
-                    self.root.after(0, update_dialog.destroy)
-            threading.Thread(target=check_update_thread, daemon=True).start()
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to check for updates: {str(e)}")
+        threading.Thread(target=self._check_updates_thread, daemon=True).start()
     
-    def show_update_available(self):
-        """Show update available dialog"""
+    def _check_updates_thread(self):
+        """Thread function to check for updates"""
+        try:
+            try:
+                import urllib.request
+                import json
+            except ImportError:
+                self.root.after(0, lambda: self.update_status("Error: Could not import required modules"))
+                return
+
+            req = urllib.request.Request(
+                f"{GITHUB_REPO}/releases/latest",
+                headers={'User-Agent': f'SpeedAutoClicker/{VERSION}'}
+            )
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+                latest_version = data.get('tag_name', '').lstrip('v')
+
+                if latest_version and latest_version != VERSION:
+                    self.root.after(0, lambda: self._show_update_prompt(latest_version, data.get('html_url', '')))
+                else:
+                    self.root.after(0, lambda: self.update_status("You have the latest version"))
+        
+        except Exception as e:
+            self.root.after(0, lambda: self.update_status(f"Update check failed: {str(e)}"))
+    
+    def _show_update_prompt(self, version, url):
+        """Show update prompt dialog"""
         result = messagebox.askyesno(
             "Update Available",
-            "A new version of AeroutClicker is available!\n\n"
+            f"A new version (v{version}) is available!\n\n"
+            f"You are currently using v{VERSION}.\n\n"
             "Would you like to update now?"
         )
         
         if result:
             try:
                 subprocess.Popen([sys.executable, "updater.py"])
-                self.root.destroy()
+                self.on_close()
             except Exception as e:
-                messagebox.showerror("Update Error", f"Failed to start updater: {str(e)}")
+                messagebox.showerror("Update Error", f"Could not start updater: {str(e)}")
+        else:
+            self.update_status(f"Update available: v{version}")
+    
+    def run_diagnostics(self):
+        """Run diagnostics to check system compatibility"""
+        self.update_status("Running diagnostics...")
+
+        threading.Thread(target=self._diagnostics_thread, daemon=True).start()
+    
+    def _diagnostics_thread(self):
+        """Thread function to run diagnostics"""
+        results = []
+
+        results.append(f"Python version: {sys.version.split()[0]}")
+
+        try:
+            import platform
+            mac_ver = platform.mac_ver()[0]
+            results.append(f"macOS version: {mac_ver}")
+        except Exception:
+            results.append("Could not determine macOS version")
+
+        modules = {
+            "pynput": "Keyboard and mouse monitoring",
+            "Quartz": "macOS UI interaction",
+            "objc": "Objective-C bridge"
+        }
+        
+        for module, description in modules.items():
+            try:
+                __import__(module)
+                results.append(f"✓ {module}: Installed ({description})")
+            except ImportError:
+                results.append(f"✗ {module}: Missing ({description})")
+
+        try:
+            test_result = self.clicker.mouse.click(hold_time=0.001)
+            if test_result:
+                results.append("✓ Accessibility permissions: Granted")
+            else:
+                results.append("✗ Accessibility permissions: May be missing")
+        except Exception:
+            results.append("✗ Accessibility permissions: Could not verify")
+
+        if self.clicker.hotkey_manager.listener and self.clicker.hotkey_manager.listener.is_alive():
+            results.append("✓ Hotkey listener: Running")
+        else:
+            results.append("✗ Hotkey listener: Not running")
+
+        self.root.after(0, lambda: self._show_diagnostics_results("\n".join(results)))
+    
+    def _show_diagnostics_results(self, results):
+        """Show diagnostics results in a dialog"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Diagnostics Results")
+        dialog.geometry("500x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        frame = ttk.Frame(dialog, padding=10)
+        frame.pack(fill="both", expand=True)
+        
+        ttk.Label(frame, text="System Diagnostics", style="Title.TLabel").pack(pady=(0, 10))
+        
+        text_widget = tk.Text(frame, wrap="word", height=15, width=60)
+        text_widget.pack(fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(text_widget, orient="vertical", command=text_widget.yview)
+        scrollbar.pack(side="right", fill="y")
+        text_widget.config(yscrollcommand=scrollbar.set)
+
+        text_widget.insert("1.0", results)
+        text_widget.config(state="disabled")
+
+        def copy_to_clipboard():
+            dialog.clipboard_clear()
+            dialog.clipboard_append(results)
+            copy_button.config(text="Copied!")
+            dialog.after(1000, lambda: copy_button.config(text="Copy to Clipboard"))
+        
+        copy_button = ttk.Button(frame, text="Copy to Clipboard", command=copy_to_clipboard)
+        copy_button.pack(pady=10)
+
+        close_button = ttk.Button(frame, text="Close", command=dialog.destroy)
+        close_button.pack(pady=(0, 10))
+
+        self.update_status("Diagnostics completed")
     
     def on_close(self):
         """Handle window close event"""
         if self.clicker.clicking:
             self.clicker.stop_clicking()
-            
+
+        self.clicker.hotkey_manager.stop_listener()
+
         save_settings(self.clicker.settings)
+
         self.root.destroy()
     
     def run(self):
@@ -718,21 +881,13 @@ class AutoClickerGUI:
         self.root.mainloop()
 
 def main():
+    """Main entry point"""
     try:
-        ev = CGEventCreate(None)
-        CGEventGetLocation(ev)
-    except Exception:
-        messagebox.showerror(
-            "Accessibility Permissions Required",
-            "AeroutClicker needs accessibility permissions to function.\n\n"
-            "Please go to System Preferences > Security & Privacy > Privacy > Accessibility\n"
-            "and add this application to the list of allowed apps."
-        )
-        return
-    
-    clicker = AutoClicker()
-    gui = AutoClickerGUI(clicker)
-    gui.run()
+        clicker = AutoClicker()
+        gui = AutoClickerGUI(clicker)
+        gui.run()
+    except Exception as e:
+        messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
