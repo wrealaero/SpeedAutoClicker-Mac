@@ -1,94 +1,148 @@
-# SpeedAutoClicker for macOS
+# SpeedAutoClicker-Mac
 
-A high-performance, reliable auto-clicker with precise control over click rate, duty cycle, and more.
+An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more.
 
 ## Features
 
-- **High Performance**: Optimized for smooth operation even at high click rates
-- **Customizable Click Rate**: Set clicks per second or millisecond intervals
-- **Duty Cycle Control**: Adjust how long each click is held down
+- **Precise Click Rate Control**: Set click intervals in milliseconds with high precision
+- **Click Duty Cycle**: Control how long each click is held down
 - **Multiple Mouse Buttons**: Support for left, right, and middle mouse buttons
-- **Hotkey Activation**: Configurable hotkeys to start/stop clicking
-- **Click Limiting**: Option to automatically stop after a specific number of clicks
-- **User-Friendly Interface**: Simple and intuitive GUI
+- **Hotkey Support**: Configurable keyboard shortcuts
+- **Click Limiting**: Set a specific number of clicks to perform
+- **Two Activation Modes**:
+  - Toggle Mode: Press once to start, again to stop
+  - Hold Mode: Click only while the hotkey is held down
+- **Click Counter**: Track how many clicks have been performed
+- **Compatible with Intel and Apple Silicon Macs**
 
 ## Installation
 
-### Setting Up with Virtual Environment (Recommended)
+### Method 1: Using the Virtual Environment (Recommended)
 
-1. Download the SpeedAutoClicker folder
-2. Open Terminal and navigate to the downloaded directory
-3. Create a virtual environment:
+```bash
+# Clone the repository
+git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
+cd SpeedAutoClicker-Mac
+
+# Run the installation script
+chmod +x install.sh
+./install.sh
+
+# Activate the virtual environment
+source venv/bin/activate
+
+# Run the autoclicker
+python autoclicker.py
+```
+
+### Method 2: Direct Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
+cd SpeedAutoClicker-Mac
+
+# Install dependencies directly
+pip3 install six pynput==1.7.6 pyobjc-framework-Quartz==9.2 pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-ApplicationServices>=9.2
+
+# Run the autoclicker
+python3 autoclicker.py
+```
+
+## Troubleshooting
+
+### Python Not Found
+
+If you see an error about Python not being found, you need to install Python 3:
+
+```bash
+# Check if Python is installed
+python3 --version
+
+# If not installed, you can install with Homebrew
+brew install python3
+```
+
+### Module Not Found Errors
+
+If you encounter "ModuleNotFoundError" for modules like 'six' or 'pynput':
+
+```bash
+# Install the missing module
+pip3 install six
+pip3 install pynput==1.7.6
+```
+
+For PyObjC related errors:
+
+```bash
+pip3 install pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-Quartz==9.2 pyobjc-framework-ApplicationServices>=9.2
+```
+
+### Python Crashes Immediately
+
+If Python crashes when you try to run the script:
+
+1. Make sure you've installed all dependencies correctly
+2. Try running with a specific Python version:
+   ```bash
+   python3.9 autoclicker.py
    ```
-   python3 -m venv venv
-   ```
-4. Activate the virtual environment:
-   ```
-   source venv/bin/activate
-   ```
-5. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-6. Make the script executable:
-   ```
-   chmod +x autoclicker.py
-   ```
-7. Run the application:
-   ```
-   ./autoclicker.py
+3. Check if you have accessibility permissions enabled
+4. Try reinstalling the dependencies:
+   ```bash
+   pip3 install --upgrade --force-reinstall -r requirements.txt
    ```
 
-### Quick Start (Alternative)
+### Apple Silicon (M1/M2) Mac Issues
 
-If you prefer not to use a virtual environment:
+If you're using an Apple Silicon Mac and experiencing issues:
 
-1. Download the SpeedAutoClicker folder
-2. Open Terminal and navigate to the downloaded directory
-3. Install the required dependencies:
+1. Make sure you're using Python for Apple Silicon
+2. Try installing Rosetta 2 if you're using Intel-based Python:
+   ```bash
+   softwareupdate --install-rosetta
    ```
-   pip3 install -r requirements.txt
-   ```
-4. Make the script executable:
-   ```
-   chmod +x autoclicker.py
-   ```
-5. Run the application:
-   ```
-   python3 autoclicker.py
+3. Reinstall the dependencies with the architecture-specific flag:
+   ```bash
+   pip3 install --upgrade --force-reinstall -r requirements.txt
    ```
 
-## Usage
+### Accessibility Permissions
 
-### Main Controls
+If clicking doesn't work, make sure you've granted accessibility permissions:
 
-- **Click Interval**: Set the time between clicks in milliseconds (lower = faster)
-- **Mouse Button**: Choose which mouse button to click (left, right, or middle)
-- **Hotkey**: Configure a keyboard shortcut to start/stop clicking
-- **Activation Mode**: Choose between toggle mode (press once to start, again to stop) or hold mode (click only while hotkey is held)
+1. Open System Preferences
+2. Go to Security & Privacy > Privacy > Accessibility
+3. Add Terminal or Python to the list of allowed apps
+4. Restart the application
 
-### Advanced Options
+### Hotkey Setup
 
-- **Duty Cycle**: Control how long each click is held down (as a percentage of the interval)
-- **Click Limit**: Set a maximum number of clicks to perform before stopping automatically
+To set a hotkey:
 
-### Troubleshooting
+1. Click the "Set Hotkey" button
+2. Press the key combination you want to use (e.g., Shift+Q)
+3. The hotkey will be displayed in the UI
+4. Use this hotkey to start/stop clicking based on your selected mode
 
-If the hotkey system stops responding, use the "Restart Hotkey System" button in the Advanced tab.
+## Understanding Click Settings
 
-## Permissions
+### Click Rate (CPS)
+- Set in milliseconds (ms) between clicks
+- Lower values = faster clicking
+- The equivalent Clicks Per Second (CPS) is displayed
 
-macOS requires accessibility permissions for applications that control the mouse. When you first run SpeedAutoClicker, you may need to:
+### Click Duty Cycle (CDC)
+- Controls how long each click is held down
+- Expressed as a percentage of the total click interval
+- Example: With 100ms interval and 50% duty cycle:
+  - Mouse button is pressed for 50ms
+  - Mouse button is released for 50ms
+- For games that require precise click timing, adjust this value to match the game's requirements
 
-1. Go to System Preferences > Security & Privacy > Privacy > Accessibility
-2. Add Terminal or Python to the list of allowed applications
-3. Ensure the checkbox next to the application is selected
+## Support
 
-## Support & Community
-
-Join our Discord server for support, feature requests, and to connect with other users:
-[SpeedAutoClicker Discord](https://discord.gg/MxGV8fGzpR)
-
-## Credits
-
-Created by wrealaero
+If you encounter any issues or have suggestions:
+- Join our [Discord Server](https://discord.gg/MxGV8fGzpR)
+- DM 5qvx for bugs and issues
