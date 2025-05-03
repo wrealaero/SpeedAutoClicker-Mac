@@ -1,105 +1,149 @@
 #!/bin/bash
 
-BOLD="\033[1m"
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-BLUE="\033[34m"
-RESET="\033[0m"
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo -e "${BOLD}${BLUE}====================================${RESET}"
-echo -e "${BOLD}${BLUE}     SpeedAutoClicker Installation  ${RESET}"
-echo -e "${BOLD}${BLUE}====================================${RESET}"
+echo -e "${BLUE}"
+echo "  ___                  _    _       _        ___ _ _      _             "
+echo " / __|_ __  ___ ___ __| |  /_\  _  | |_ ___ / __| (_)__  | |_____ _ _   "
+echo " \__ \ '_ \/ -_) -_) _\` | / _ \| || |  _/ _ \ (__| | / _| | / / -_) '_|  " # ts so tuff boi
+echo " |___/ .__/\___\___\__,_|/_/ \_\\_,_|\__\___/\___|_|_\__| |_\_\___|_|    "
+echo "     |_|                                                                "
+echo -e "${NC}"
+echo -e "${GREEN}Installation Script${NC}"
 echo
 
-echo -e "${BOLD}Checking Python installation...${RESET}"
+echo -e "${YELLOW}Checking for Python 3...${NC}"
 if command -v python3 &>/dev/null; then
     PYTHON_VERSION=$(python3 --version)
-    echo -e "${GREEN}✓ Found $PYTHON_VERSION${RESET}"
+    echo -e "${GREEN}Found $PYTHON_VERSION${NC}"
 else
-    echo -e "${RED}✗ Python 3 not found${RESET}"
-    echo -e "${YELLOW}Please install Python 3 from python.org or using Homebrew:${RESET}"
-    echo "    brew install python"
+    echo -e "${RED}Python 3 not found. Please install Python 3 before continuing.${NC}"
+    echo "You can install Python 3 from https://www.python.org/downloads/ or using Homebrew:"
+    echo "  brew install python"
     exit 1
 fi
 
-echo -e "${BOLD}Checking pip installation...${RESET}"
+echo -e "${YELLOW}Checking for pip...${NC}"
 if python3 -m pip --version &>/dev/null; then
     PIP_VERSION=$(python3 -m pip --version)
-    echo -e "${GREEN}✓ Found pip${RESET}"
+    echo -e "${GREEN}Found pip: $PIP_VERSION${NC}"
 else
-    echo -e "${RED}✗ pip not found${RESET}"
-    echo -e "${YELLOW}Installing pip...${RESET}"
+    echo -e "${RED}pip not found. Installing pip...${NC}"
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
     python3 get-pip.py
     rm get-pip.py
 fi
 
-echo -e "${BOLD}Checking virtualenv...${RESET}"
+echo -e "${YELLOW}Checking for virtualenv...${NC}"
 if python3 -m pip show virtualenv &>/dev/null; then
-    echo -e "${GREEN}✓ virtualenv is installed${RESET}"
+    echo -e "${GREEN}virtualenv is installed${NC}"
 else
-    echo -e "${YELLOW}Installing virtualenv...${RESET}"
+    echo -e "${YELLOW}virtualenv not found. Installing virtualenv...${NC}"
     python3 -m pip install virtualenv
 fi
 
-IS_APPLE_SILICON=false
-if [[ $(uname -m) == "arm64" ]]; then
-    IS_APPLE_SILICON=true
-    echo -e "${BLUE}ℹ Detected Apple Silicon Mac${RESET}"
-fi
-
-echo -e "${BOLD}Setting up virtual environment...${RESET}"
-if [ -d "venv" ]; then
-    echo -e "${YELLOW}ℹ Existing virtual environment found. Recreating...${RESET}"
-    rm -rf venv
-fi
-
-python3 -m virtualenv venv
-if [ $? -ne 0 ]; then
-    echo -e "${RED}✗ Failed to create virtual environment${RESET}"
-    echo -e "${YELLOW}Trying alternative method...${RESET}"
-    python3 -m venv venv
+if [ ! -d "venv" ]; then
+    echo -e "${YELLOW}Creating virtual environment...${NC}"
+    python3 -m virtualenv venv
     if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ Failed to create virtual environment using venv${RESET}"
-        echo -e "${YELLOW}Installing dependencies globally...${RESET}"
-        python3 -m pip install -r requirements.txt
+        echo -e "${RED}Failed to create virtual environment. Trying with venv module...${NC}"
+        python3 -m venv venv
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Failed to create virtual environment. Installing dependencies globally...${NC}"
+            GLOBAL_INSTALL=1
+        fi
     fi
 else
-    echo -e "${GREEN}✓ Virtual environment created${RESET}"
+    echo -e "${GREEN}Virtual environment already exists${NC}"
+fi
+
+echo -e "${YELLOW}Installing dependencies...${NC}"
+if [ -z "$GLOBAL_INSTALL" ]; then
     source venv/bin/activate
-    echo -e "${BOLD}Installing dependencies...${RESET}"
-    if [ "$IS_APPLE_SILICON" = true ]; then
-        echo -e "${BLUE}ℹ Using Apple Silicon specific installation${RESET}"
-        pip install six
-        pip install pynput==1.7.6
-        pip install pyobjc-framework-Quartz==9.2 pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-ApplicationServices>=9.2
-    else
-        pip install -r requirements.txt
-    fi
+    pip install -r requirements.txt
     if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ Failed to install dependencies${RESET}"
-        echo -e "${YELLOW}Please try installing them manually:${RESET}"
-        echo "    pip install -r requirements.txt"
+        echo -e "${RED}Failed to install dependencies in virtual environment. Trying global installation...${NC}"
+        GLOBAL_INSTALL=1
     else
-        echo -e "${GREEN}✓ Dependencies installed successfully${RESET}"
+        echo -e "${GREEN}Dependencies installed successfully in virtual environment${NC}"
     fi
 fi
 
-echo -e "${BOLD}Making scripts executable...${RESET}"
+if [ ! -z "$GLOBAL_INSTALL" ]; then
+    python3 -m pip install -r requirements.txt
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to install dependencies. Please check the error messages above.${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}Dependencies installed successfully (global installation)${NC}"
+    fi
+fi
+
 chmod +x autoclicker.py
 chmod +x updater.py
-echo -e "${GREEN}✓ Scripts are now executable${RESET}"
-
-echo -e "${BOLD}Checking accessibility permissions...${RESET}"
-echo -e "${YELLOW}ℹ SpeedAutoClicker requires accessibility permissions to function properly.${RESET}"
-echo -e "${YELLOW}ℹ You may be prompted to grant these permissions when you first run the app.${RESET}"
 
 echo
-echo -e "${BOLD}${GREEN}Installation complete!${RESET}"
+echo -e "${GREEN}Installation completed successfully!${NC}"
 echo
-echo -e "${BOLD}Follow README Instructions in Github :D${RESET}"
+echo -e "To run SpeedAutoClicker:"
+if [ -z "$GLOBAL_INSTALL" ]; then
+    echo -e "  ${BLUE}source venv/bin/activate${NC}"
+    echo -e "  ${BLUE}python autoclicker.py${NC}"
+else
+    echo -e "  ${BLUE}python3 autoclicker.py${NC}"
+fi
+echo
+echo -e "${YELLOW}Note:${NC} You may need to grant accessibility permissions to Terminal or Python"
+echo "in System Preferences > Security & Privacy > Privacy > Accessibility"
+echo
 
-echo -e "${BOLD}${BLUE}====================================${RESET}"
-echo -e "${BOLD}${BLUE}  Thank you for using SpeedAutoClicker!${RESET}"
-echo -e "${BOLD}${BLUE}====================================${RESET}"
+echo -e "${YELLOW}Creating launcher script...${NC}"
+cat > speedautoclicker << EOL
+#!/bin/bash
+# SpeedAutoClicker Launcher
+
+# Get the directory of this script
+DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if we're using a virtual environment
+if [ -d "\$DIR/venv" ]; then
+    # Activate virtual environment and run
+    source "\$DIR/venv/bin/activate"
+    python "\$DIR/autoclicker.py"
+else
+    # Run with system Python
+    python3 "\$DIR/autoclicker.py"
+fi
+EOL
+
+chmod +x speedautoclicker
+
+echo -e "${GREEN}Created launcher script: ${BLUE}./speedautoclicker${NC}"
+echo
+
+echo -e "${YELLOW}Checking accessibility permissions...${NC}"
+if ! python3 -c "import Quartz; print('Quartz available')" &>/dev/null; then
+    echo -e "${RED}Warning: Quartz module not working properly.${NC}"
+    echo "You may need to grant accessibility permissions to Terminal or Python."
+    echo "Go to System Preferences > Security & Privacy > Privacy > Accessibility"
+    echo "and add Terminal or Python to the list of allowed apps."
+
+    read -p "Would you like to open System Preferences now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    fi
+else
+    echo -e "${GREEN}Quartz module is working properly.${NC}"
+fi
+
+echo
+echo -e "${GREEN}Installation complete! You can now run SpeedAutoClicker using:${NC}"
+echo -e "${BLUE}./speedautoclicker${NC}"
+echo
+echo -e "${YELLOW}If you encounter any issues, please report them on Discord or GitHub.${NC}"
+echo
