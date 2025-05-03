@@ -98,15 +98,8 @@ echo -e "${YELLOW}ℹ You may be prompted to grant these permissions when you fi
 echo
 echo -e "${BOLD}${GREEN}Installation complete!${RESET}"
 echo
-echo -e "${BOLD}To run SpeedAutoClicker:${RESET}"
-echo -e "1. Activate the virtual environment:${RESET}"
-echo -e "   ${BLUE}source venv/bin/activate${RESET}"
-echo
-echo -e "2. Run the application:${RESET}"
-echo -e "   ${BLUE}./autoclicker.py${RESET}"
-echo -e "   or"
-echo -e "   ${BLUE}python3 autoclicker.py${RESET}"
-echo
+echo -e "${BOLD}Follow README Instructions in Github :D${RESET}"
+
 echo -e "${BOLD}${BLUE}====================================${RESET}"
 echo -e "${BOLD}${BLUE}  Thank you for using SpeedAutoClicker!${RESET}"
 echo -e "${BOLD}${BLUE}====================================${RESET}"
