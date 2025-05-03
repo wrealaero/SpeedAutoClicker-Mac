@@ -1,169 +1,203 @@
 #!/usr/bin/env python3
-# STILL IN BETA - not implanted in main script yet - working on it :D
-
+# STILL IN BETA - NOT 100% SURE IF IT WORKS D:
 import os
 import sys
-import json
 import time
+import json
 import shutil
-import tempfile
-import subprocess
 import urllib.request
-import urllib.error
-from datetime import datetime
+import subprocess
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-GITHUB_USER = "wrealaero"
-GITHUB_REPO = "SpeedAutoClicker-Mac"
-GITHUB_BRANCH = "main"
-
-FILES_TO_CHECK = [
+GITHUB_REPO = "wrealaero/SpeedAutoClicker-Mac"
+GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
+GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
+FILES_TO_UPDATE = [
     "autoclicker.py",
+    "updater.py",
     "install.sh",
     "requirements.txt",
-    "updater.py"
+    "README.md"
 ]
 
-VERSION_FILE = os.path.expanduser("~/.speedautoclicker_version.json")
+class UpdaterGUI:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("AeroutClicker Updater")
+        self.root.geometry("400x300")
+        self.root.resizable(False, False)
 
-def get_github_file_url(file_path):
-    """Get the raw GitHub URL for a file"""
-    return f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{file_path}"
+        self.style = ttk.Style()
+        self.style.configure("TFrame", padding=10)
+        self.style.configure("TLabel", padding=5)
+        self.style.configure("TProgressbar", thickness=10)
 
-def get_github_api_url():
-    """Get the GitHub API URL for the repository"""
-    return f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/commits?path="
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill="both", expand=True)
 
-def download_file(url, save_path=None):
-    """Download a file from a URL"""
-    try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            if save_path:
-                with open(save_path, 'wb') as out_file:
-                    out_file.write(response.read())
-                return True
-            else:
-                return response.read().decode('utf-8')
-    except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        print(f"Error downloading {url}: {e}")
-        return None
+        title_label = ttk.Label(
+            main_frame, 
+            text="AeroutClicker Updater",
+            font=("Arial", 16, "bold")
+        )
+        title_label.pack(pady=(10, 20))
 
-def get_last_commit_date(file_path):
-    """Get the last commit date for a file"""
-    try:
-        api_url = get_github_api_url() + file_path
-        with urllib.request.urlopen(api_url, timeout=5) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            if data and len(data) > 0:
-                return data[0]['commit']['committer']['date']
-    except Exception as e:
-        print(f"Error checking commit date: {e}")
-    return None
+        status_frame = ttk.Frame(main_frame)
+        status_frame.pack(fill="x", pady=10)
+        
+        self.status_var = tk.StringVar(value="Preparing to update...")
+        status_label = ttk.Label(
+            status_frame, 
+            textvariable=self.status_var,
+            font=("Arial", 10)
+        )
+        status_label.pack(anchor="w")
 
-def load_version_info():
-    """Load the local version information"""
-    if os.path.exists(VERSION_FILE):
+        self.progress_var = tk.DoubleVar(value=0.0)
+        self.progress_bar = ttk.Progressbar(
+            main_frame,
+            variable=self.progress_var,
+            mode="determinate",
+            length=350
+        )
+        self.progress_bar.pack(pady=20)
+
+        self.file_var = tk.StringVar(value="")
+        file_label = ttk.Label(
+            main_frame, 
+            textvariable=self.file_var,
+            font=("Arial", 9, "italic")
+        )
+        file_label.pack(anchor="w")
+
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(fill="x", pady=(20, 10))
+        
+        self.cancel_button = ttk.Button(
+            buttons_frame, 
+            text="Cancel",
+            command=self.cancel_update
+        )
+        self.cancel_button.pack(side="right")
+
+        self.root.protocol("WM_DELETE_WINDOW", self.cancel_update)
+
+        self.root.after(500, self.start_update)
+    
+    def update_status(self, text):
+        """Update the status text"""
+        self.status_var.set(text)
+        self.root.update_idletasks()
+    
+    def update_file_progress(self, filename):
+        """Update the current file being processed"""
+        self.file_var.set(f"Updating: {filename}")
+        self.root.update_idletasks()
+    
+    def update_progress(self, value):
+        """Update the progress bar"""
+        self.progress_var.set(value)
+        self.root.update_idletasks()
+    
+    def cancel_update(self):
+        """Handle cancel button click or window close"""
+        result = messagebox.askyesno(
+            "Cancel Update",
+            "Are you sure you want to cancel the update?\n\n"
+            "The application may be in an inconsistent state."
+        )
+        
+        if result:
+            self.root.destroy()
+            sys.exit(0)
+    
+    def show_error(self, message):
+        """Show error message and exit"""
+        messagebox.showerror("Update Error", message)
+        self.root.destroy()
+        sys.exit(1)
+    
+    def complete_update(self):
+        """Show completion message and exit"""
+        messagebox.showinfo(
+            "Update Complete",
+            "AeroutClicker has been successfully updated!\n\n"
+            "The application will now restart."
+        )
+
         try:
-            with open(VERSION_FILE, 'r') as f:
-                return json.load(f)
+            subprocess.Popen([sys.executable, "autoclicker.py"])
         except Exception:
             pass
-    return {}
-
-def save_version_info(version_info):
-    """Save the local version information"""
-    try:
-        with open(VERSION_FILE, 'w') as f:
-            json.dump(version_info, f)
-    except Exception as e:
-        print(f"Error saving version info: {e}")
-
-def check_for_updates(silent=False):
-    """Check if updates are available"""
-    if not silent:
-        print("Checking for updates...")
-
-    version_info = load_version_info()
-
-    updates_available = False
-    updated_files = []
-    
-    for file_path in FILES_TO_CHECK:
-        last_commit = get_last_commit_date(file_path)
-        if not last_commit:
-            continue
-            
-        local_commit = version_info.get(file_path, "")
         
-        if local_commit != last_commit:
-            updates_available = True
-            updated_files.append(file_path)
-            version_info[file_path] = last_commit
-
-    if updates_available:
-        save_version_info(version_info)
+        self.root.destroy()
+        sys.exit(0)
     
-    return updates_available, updated_files
+    def start_update(self):
+        """Start the update process"""
+        try:
+            self.update_status("Checking for updates...")
+            self.update_progress(10)
 
-def update_application(callback=None):
-    """Update the application files"""
-    print("Updating SpeedAutoClicker...")
+            backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backup")
+            if not os.path.exists(backup_dir):
+                os.makedirs(backup_dir)
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-
-        for file_path in FILES_TO_CHECK:
-            file_url = get_github_file_url(file_path)
-            local_path = os.path.join(current_dir, file_path)
-            temp_path = os.path.join(temp_dir, file_path)
+            self.update_status("Creating backup...")
+            self.update_progress(20)
             
-            print(f"Updating {file_path}...")
+            for file in FILES_TO_UPDATE:
+                if os.path.exists(file):
+                    self.update_file_progress(file)
+                    shutil.copy2(file, os.path.join(backup_dir, file))
+
+            self.update_status("Downloading updates...")
+            self.update_progress(30)
             
-            if download_file(file_url, temp_path):
+            total_files = len(FILES_TO_UPDATE)
+            for i, file in enumerate(FILES_TO_UPDATE):
+                progress = 30 + (i / total_files * 60)
+                self.update_progress(progress)
+                self.update_file_progress(file)
 
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                file_url = f"{GITHUB_RAW}/{file}"
+                try:
+                    req = urllib.request.Request(file_url)
+                    req.add_header('User-Agent', 'AeroutClicker-Updater')
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        content = response.read()
 
-                shutil.copy2(temp_path, local_path)
+                    with open(file, 'wb') as f:
+                        f.write(content)
 
-                if file_path.endswith('.py') or file_path.endswith('.sh'):
-                    os.chmod(local_path, 0o755)
-            else:
-                print(f"Failed to update {file_path}")
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    self.show_error(f"Failed to download {file}: {str(e)}")
+
+            self.update_status("Setting permissions...")
+            self.update_progress(95)
+            
+            for file in ["autoclicker.py", "updater.py", "install.sh"]:
+                if os.path.exists(file):
+                    try:
+                        os.chmod(file, 0o755) 
+                    except Exception:
+                        pass
+
+            self.update_status("Update completed successfully!")
+            self.update_progress(100)
+
+            self.root.after(1000, self.complete_update)
+            
+        except Exception as e:
+            self.show_error(f"Update failed: {str(e)}")
     
-    print("Update completed successfully!")
-
-    try:
-        install_script = os.path.join(current_dir, "install.sh")
-        if os.path.exists(install_script):
-            print("Running install script to update dependencies...")
-            subprocess.run(["bash", install_script, "--update"], check=True)
-    except subprocess.SubprocessError as e:
-        print(f"Error running install script: {e}")
-
-    if callback:
-        callback()
-
-def prompt_for_update():
-    """Check for updates and prompt the user"""
-    updates_available, updated_files = check_for_updates()
-    
-    if updates_available:
-        print("Updates available for the following files:")
-        for file in updated_files:
-            print(f"- {file}")
-        
-        response = input("Would you like to update now? (y/n): ")
-        if response.lower() in ['y', 'yes']:
-            update_application()
-            print("Please restart the application to apply the updates.")
-            return True
-    else:
-        print("No updates available.")
-    
-    return False
+    def run(self):
+        """Start the GUI main loop"""
+        self.root.mainloop()
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--silent":
-        check_for_updates(silent=True)
-    else:
-        prompt_for_update()
+    updater = UpdaterGUI()
+    updater.run()
