@@ -11,35 +11,51 @@ A high-performance, reliable auto-clicker with precise control over click rate, 
 - **Hotkey Activation**: Configurable hotkeys to start/stop clicking
 - **Click Limiting**: Option to automatically stop after a specific number of clicks
 - **User-Friendly Interface**: Simple and intuitive GUI
-- **Auto-Updates**: Built-in update system to keep your application current
 
 ## Installation
 
-### Method 1: Using the Installation Script
+### Setting Up with Virtual Environment (Recommended)
 
-1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
-2. Extract the ZIP file
-3. Open Terminal and navigate to the extracted directory
-4. Run the installation script:
+1. Download the SpeedAutoClicker folder
+2. Open Terminal and navigate to the downloaded directory
+3. Create a virtual environment:
    ```
-   ./install.sh
+   python3 -m venv venv
    ```
-5. Follow the on-screen instructions
-
-### Method 2: Manual Installation
-
-1. Ensure you have Python 3.7 or later installed
-2. Install the required dependencies:
+4. Activate the virtual environment:
    ```
-   pip3 install -r requirements.txt
+   source venv/bin/activate
    ```
-3. Make the script executable:
+5. Install the required dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+6. Make the script executable:
    ```
    chmod +x autoclicker.py
    ```
-4. Run the application:
+7. Run the application:
    ```
    ./autoclicker.py
+   ```
+
+### Quick Start (Alternative)
+
+If you prefer not to use a virtual environment:
+
+1. Download the SpeedAutoClicker folder
+2. Open Terminal and navigate to the downloaded directory
+3. Install the required dependencies:
+   ```
+   pip3 install -r requirements.txt
+   ```
+4. Make the script executable:
+   ```
+   chmod +x autoclicker.py
+   ```
+5. Run the application:
+   ```
+   python3 autoclicker.py
    ```
 
 ## Usage
@@ -72,10 +88,6 @@ macOS requires accessibility permissions for applications that control the mouse
 
 Join our Discord server for support, feature requests, and to connect with other users:
 [SpeedAutoClicker Discord](https://discord.gg/MxGV8fGzpR)
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Credits
 
