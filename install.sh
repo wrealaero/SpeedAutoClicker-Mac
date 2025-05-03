@@ -6,6 +6,15 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+echo -e "${BLUE}"
+echo "  ___                  _    _       _        ___ _ _      _             "
+echo " / __|_ __  ___ ___ __| |  /_\  _  | |_ ___ / __| (_)__  | |_____ _ _   "
+echo " \__ \ '_ \/ -_) -_) _\` | / _ \| || |  _/ _ \ (__| | / _| | / / -_) '_|  " # ts so tuff boi
+echo " |___/ .__/\___\___\__,_|/_/ \_\\_,_|\__\___/\___|_|_\__| |_\_\___|_|    "
+echo "     |_|                                                                "
+echo -e "${NC}"
+echo -e "${GREEN}Installation Script${NC}"
+echo
 echo -e "${BLUE}=== AeroutClicker Installation Script ===${NC}"
 echo -e "${YELLOW}This script will install all required dependencies for AeroutClicker.${NC}"
 echo
