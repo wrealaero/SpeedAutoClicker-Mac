@@ -6,27 +6,41 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== AeroutClicker Installation Script ===${NC}"
-echo -e "${YELLOW}This script will install all required dependencies for AeroutClicker.${NC}"
-echo
+echo -e "${BLUE}╔════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║          AeroutClicker Installation        ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════╝${NC}"
 
+echo -e "${YELLOW}Checking for Python 3...${NC}"
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}Python 3 is not installed.${NC}"
-    echo -e "Please install Python 3 using one of these methods:"
-    echo -e "1. Download from ${BLUE}https://www.python.org/downloads/macos/${NC}"
-    echo -e "2. Install using Homebrew: ${BLUE}brew install python3${NC}"
-    exit 1
+    echo -e "${YELLOW}Would you like to install Python 3 now? (y/n)${NC}"
+    read -r install_python
+    
+    if [[ "$install_python" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Installing Python 3 using Homebrew...${NC}"
+
+        if ! command -v brew &> /dev/null; then
+            echo -e "${YELLOW}Homebrew not found. Installing Homebrew...${NC}"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+
+        brew install python
+
+        if ! command -v python3 &> /dev/null; then
+            echo -e "${RED}Failed to install Python 3. Please install it manually and try again.${NC}"
+            echo -e "${YELLOW}Visit https://www.python.org/downloads/ to download Python 3.${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}Python 3 is required to run AeroutClicker.${NC}"
+        echo -e "${YELLOW}Please install Python 3 and try again.${NC}"
+        echo -e "${YELLOW}Visit https://www.python.org/downloads/ to download Python 3.${NC}"
+        exit 1
+    fi
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo -e "${YELLOW}Detected Python version: ${PYTHON_VERSION}${NC}"
-
-if ! python3 -m pip --version &> /dev/null; then
-    echo -e "${YELLOW}Installing pip...${NC}"
-    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-    python3 get-pip.py
-    rm get-pip.py
-fi
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
+echo -e "${GREEN}Found Python $PYTHON_VERSION${NC}"
 
 echo -e "${YELLOW}Creating virtual environment...${NC}"
 python3 -m venv venv 2>/dev/null
@@ -35,56 +49,57 @@ if [ -d "venv" ]; then
     echo -e "${GREEN}Virtual environment created successfully.${NC}"
     echo -e "${YELLOW}Activating virtual environment...${NC}"
     source venv/bin/activate
-    USING_VENV=true
+
+    if [ "$VIRTUAL_ENV" != "" ]; then
+        echo -e "${GREEN}Virtual environment activated.${NC}"
+    else
+        echo -e "${YELLOW}Could not activate virtual environment. Continuing with system Python...${NC}"
+    fi
 else
-    echo -e "${YELLOW}Virtual environment creation failed, continuing with system Python...${NC}"
-    USING_VENV=false
+    echo -e "${YELLOW}Virtual environment creation failed. Continuing with system Python...${NC}"
 fi
 
 echo -e "${YELLOW}Installing dependencies...${NC}"
-
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-    echo -e "${YELLOW}Detected Apple Silicon (M1/M2) Mac${NC}"
-else
-    echo -e "${YELLOW}Detected Intel Mac${NC}"
-fi
-
 python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
 
-echo -e "${YELLOW}Installing six...${NC}"
-python3 -m pip install six || { echo -e "${RED}Failed to install six${NC}"; exit 1; }
-
-echo -e "${YELLOW}Installing pynput...${NC}"
-python3 -m pip install pynput==1.7.6 || { echo -e "${RED}Failed to install pynput${NC}"; exit 1; }
-
-echo -e "${YELLOW}Installing PyObjC components...${NC}"
-python3 -m pip install pyobjc-core>=9.2 || { echo -e "${RED}Failed to install pyobjc-core${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-Cocoa>=9.2 || { echo -e "${RED}Failed to install pyobjc-framework-Cocoa${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-Quartz==9.2 || { echo -e "${RED}Failed to install pyobjc-framework-Quartz${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-ApplicationServices>=9.2 || { echo -e "${RED}Failed to install pyobjc-framework-ApplicationServices${NC}"; exit 1; }
-
-chmod +x autoclicker.py
-
-echo -e "${GREEN}Installation complete!${NC}"
-
-echo -e "${BLUE}=== How to Run AeroutClicker ===${NC}"
-if [ "$USING_VENV" = true ]; then
-    echo -e "1. Activate the virtual environment: ${YELLOW}source venv/bin/activate${NC}"
-    echo -e "2. Run the autoclicker: ${YELLOW}python autoclicker.py${NC}"
-    echo -e "Or use the one-line command: ${YELLOW}source venv/bin/activate && python autoclicker.py${NC}"
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Dependencies installed successfully.${NC}"
 else
-    echo -e "Run the autoclicker: ${YELLOW}python3 autoclicker.py${NC}"
+    echo -e "${RED}Failed to install some dependencies.${NC}"
+    echo -e "${YELLOW}Trying alternative installation method...${NC}"
+
+    python3 -m pip install six
+    python3 -m pip install pynput==1.7.6
+    python3 -m pip install pyobjc-framework-Quartz==9.2
+    python3 -m pip install pyobjc-core
+    python3 -m pip install pyobjc-framework-Cocoa
+    python3 -m pip install pyobjc-framework-ApplicationServices
+    
+    echo -e "${YELLOW}Alternative installation completed. Some features may not work correctly.${NC}"
 fi
 
-echo -e "${BLUE}=== Important Notice ===${NC}"
-echo -e "${YELLOW}You may need to grant accessibility permissions to use AeroutClicker.${NC}"
-echo -e "Go to System Preferences > Security & Privacy > Privacy > Accessibility"
-echo -e "and add Terminal or the Python application to the list of allowed apps."
+echo -e "${YELLOW}Setting permissions...${NC}"
+chmod +x autoclicker.py
+chmod +x updater.py
 
-echo -e "${BLUE}=== Troubleshooting Tips ===${NC}"
-echo -e "If you encounter issues:"
-echo -e "1. Make sure you've granted accessibility permissions"
-echo -e "2. Try running with a specific Python version: ${YELLOW}python3.9 autoclicker.py${NC}"
-echo -e "3. For module errors, try reinstalling: ${YELLOW}pip3 install -r requirements.txt${NC}"
-echo -e "4. Join our Discord for help: ${BLUE}https://discord.gg/MxGV8fGzpR${NC}"
+echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║           Installation Complete!           ║${NC}"
+echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
+
+echo -e "${YELLOW}To run AeroutClicker:${NC}"
+if [ -d "venv" ]; then
+    echo -e "${BLUE}source venv/bin/activate${NC}"
+fi
+echo -e "${BLUE}python3 autoclicker.py${NC}"
+
+echo -e "${YELLOW}Note: You may need to grant accessibility permissions to use AeroutClicker.${NC}"
+echo -e "${YELLOW}Go to System Preferences > Security & Privacy > Privacy > Accessibility${NC}"
+echo -e "${YELLOW}and add Terminal or the Python application to the list of allowed apps.${NC}"
+
+echo -e "${YELLOW}Would you like to run AeroutClicker now? (y/n)${NC}"
+read -r run_now
+
+if [[ "$run_now" =~ ^[Yy]$ ]]; then
+    python3 autoclicker.py
+fi
