@@ -1,148 +1,128 @@
-# SpeedAutoClicker-Mac
+# Aerout SpeedAutoClicker for macOS
 
-An advanced auto-clicker for macOS with precise control over click rate, duty cycle, and more.
+A high-performance autoclicker with advanced features, designed specifically for macOS.
+
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
 
-- **Precise Click Rate Control**: Set click intervals in milliseconds with high precision
-- **Click Duty Cycle**: Control how long each click is held down
+- **High Performance**: Optimized for speed and reliability
+- **Flexible Clicking**: Adjust CPS (clicks per second) from 0.1 to 1000+
 - **Multiple Mouse Buttons**: Support for left, right, and middle mouse buttons
-- **Hotkey Support**: Configurable keyboard shortcuts
-- **Click Limiting**: Set a specific number of clicks to perform
-- **Two Activation Modes**:
-  - Toggle Mode: Press once to start, again to stop
-  - Hold Mode: Click only while the hotkey is held down
-- **Click Counter**: Track how many clicks have been performed
-- **Compatible with Intel and Apple Silicon Macs**
+- **Advanced Controls**: Customize duty cycle and hold time for precise clicking patterns
+- **Hotkey Support**: Configurable keyboard shortcuts to control the autoclicker
+- **Click Modes**: Toggle mode and hold mode for different use cases
+- **Click Limiting**: Set a maximum number of clicks
+- **Configuration Profiles**: Save and load different clicking configurations
+- **Customizable UI**: Multiple themes and color options
+- **Diagnostic Tools**: Built-in logging and diagnostic reporting
 
 ## Installation
 
-### Method 1: Using the Virtual Environment (Recommended)
+### Method 1: Installer Script
 
-```bash
-# Clone the repository
-git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
-cd SpeedAutoClicker-Mac
+1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
+2. Extract the ZIP file
+3. Open Terminal and navigate to the extracted folder
+4. Run the installer script:
+   ```bash
+   ./install.sh
+   ```
+5. Follow the on-screen instructions
 
-# Run the installation script
-chmod +x install.sh
-./install.sh
+### Method 2: Manual Installation
 
-# Activate the virtual environment
-source venv/bin/activate
+1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
+2. Extract the ZIP file to a location of your choice
+3. Install the required dependencies:
+   ```bash
+   python3 -m pip install --user -r requirements.txt
+   ```
+4. Run the application:
+   ```bash
+   python3 autoclicker.py
+   ```
 
-# Run the autoclicker
-python autoclicker.py
-```
+## Usage
 
-### Method 2: Direct Installation
+### Basic Usage
 
-```bash
-# Clone the repository
-git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
-cd SpeedAutoClicker-Mac
+1. Set your desired Clicks Per Second (CPS)
+2. Choose which mouse button to click
+3. Select Toggle or Hold mode
+4. Press the hotkey (default: F6) to start/stop clicking
 
-# Install dependencies directly
-pip3 install six pynput==1.7.6 pyobjc-framework-Quartz==9.2 pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-ApplicationServices>=9.2
+### Advanced Features
 
-# Run the autoclicker
-python3 autoclicker.py
-```
+- **Duty Cycle**: Controls how long the mouse button is held down
+  - 50% is balanced (equal press and release time)
+  - Higher values make the press longer
+  - Lower values make the release longer
+
+- **Hold Time**: Precise control over button press duration in milliseconds
+  - Set to 0 to use the duty cycle instead
+
+- **Click Limit**: Automatically stop after a specific number of clicks
+
+- **Configurations**: Save and load different clicking profiles for various use cases
 
 ## Troubleshooting
 
-### Python Not Found
+### Common Issues
 
-If you see an error about Python not being found, you need to install Python 3:
+1. **Hotkeys Not Working**
+   - Make sure you've granted accessibility permissions to the application
+   - Try running the app with administrator privileges
+   - Check if another application is using the same hotkey
 
-```bash
-# Check if Python is installed
-python3 --version
+2. **Clicking Not Working**
+   - Verify that the application has accessibility permissions
+   - Try a different mouse button
+   - Restart the application
 
-# If not installed, you can install with Homebrew
-brew install python3
-```
+3. **Application Won't Start**
+   - Check if Python 3 is installed correctly
+   - Verify that all dependencies are installed
+   - Check the logs for error messages
 
-### Module Not Found Errors
+### Diagnostic Report
 
-If you encounter "ModuleNotFoundError" for modules like 'six' or 'pynput':
+If you encounter issues, you can generate a diagnostic report:
 
-```bash
-# Install the missing module
-pip3 install six
-pip3 install pynput==1.7.6
-```
+1. Go to the "Advanced" tab
+2. Click "Create Diagnostic Report"
+3. Share this report when seeking help
 
-For PyObjC related errors:
+## Privacy
 
-```bash
-pip3 install pyobjc-core>=9.2 pyobjc-framework-Cocoa>=9.2 pyobjc-framework-Quartz==9.2 pyobjc-framework-ApplicationServices>=9.2
-```
+Aerout SpeedAutoClicker respects your privacy:
 
-### Python Crashes Immediately
+- No data is sent to any servers
+- All logs and configurations are stored locally on your computer
+- No personal information is collected
 
-If Python crashes when you try to run the script:
+## System Requirements
 
-1. Make sure you've installed all dependencies correctly
-2. Try running with a specific Python version:
-   ```bash
-   python3.9 autoclicker.py
-   ```
-3. Check if you have accessibility permissions enabled
-4. Try reinstalling the dependencies:
-   ```bash
-   pip3 install --upgrade --force-reinstall -r requirements.txt
-   ```
+- macOS 10.13 (High Sierra) or later
+- Python 3.7 or later
+- 50MB of disk space
+- Administrative privileges for installation
 
-### Apple Silicon (M1/M2) Mac Issues
+## License
 
-If you're using an Apple Silicon Mac and experiencing issues:
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-1. Make sure you're using Python for Apple Silicon
-2. Try installing Rosetta 2 if you're using Intel-based Python:
-   ```bash
-   softwareupdate --install-rosetta
-   ```
-3. Reinstall the dependencies with the architecture-specific flag:
-   ```bash
-   pip3 install --upgrade --force-reinstall -r requirements.txt
-   ```
+## Acknowledgments
 
-### Accessibility Permissions
+- Thanks to all contributors and testers (Lighting, Cretz, etc..)
+- Special thanks to the Python community for the excellent libraries
 
-If clicking doesn't work, make sure you've granted accessibility permissions:
+## Contact & Support
 
-1. Open System Preferences
-2. Go to Security & Privacy > Privacy > Accessibility
-3. Add Terminal or Python to the list of allowed apps
-4. Restart the application
+For bug reports and feature requests, please use the [GitHub Issues page](https://github.com/wrealaero/SpeedAutoClicker-Mac/issues).
 
-### Hotkey Setup
+---
 
-To set a hotkey:
-
-1. Click the "Set Hotkey" button
-2. Press the key combination you want to use (e.g., Shift+Q)
-3. The hotkey will be displayed in the UI
-4. Use this hotkey to start/stop clicking based on your selected mode
-
-## Understanding Click Settings
-
-### Click Rate (CPS)
-- Set in milliseconds (ms) between clicks
-- Lower values = faster clicking
-- The equivalent Clicks Per Second (CPS) is displayed
-
-### Click Duty Cycle (CDC)
-- Controls how long each click is held down
-- Expressed as a percentage of the total click interval
-- Example: With 100ms interval and 50% duty cycle:
-  - Mouse button is pressed for 50ms
-  - Mouse button is released for 50ms
-- For games that require precise click timing, adjust this value to match the game's requirements
-
-## Support
-
-If you encounter any issues or have suggestions:
-- Join our [Discord Server](https://discord.gg/MxGV8fGzpR)
-- DM 5qvx for bugs and issues
+Made with ❤️ by RealAero <3
