@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Aerout SpeedAutoClicker for macOS :D
-A hopefully high performing autoclicker with advanced features(cap)
+Aerout SpeedAutoClicker for macOS
+A very good autoclicker with cool features
 """
 
 import os
@@ -26,9 +26,9 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 
 clicking = False
 click_count = 0
-click_interval_ms = 100.0 
-hold_ratio = 0.5
-hold_time = 0.0 
+click_interval_ms = 100.0  
+hold_ratio = 0.5 
+hold_time = 0.0  
 mouse_controller = MouseController()
 hotkey = {"type": "keyboard", "keys": ["f6"]}
 mouse_button = "left"
@@ -95,7 +95,6 @@ def save_settings(settings):
         app_logger.error(f"Error saving settings: {e}", exc_info=True)
         messagebox.showerror("Error", f"Failed to save settings: {e}")
 
-# Load settings
 cfg = load_settings()
 click_interval_ms = 1000.0 / cfg["cps"]
 hold_ratio = cfg["duty"] / 100.0
@@ -223,7 +222,7 @@ def perform_click():
                         time.sleep(hold_time / 1000.0)
                     else:
                         time.sleep((click_interval_ms * hold_ratio) / 1000.0)
-                    
+
                     mouse_up = CGEventCreateMouseEvent(
                         None, kCGEventMouseUp, (x, y), button_map[button]
                     )
@@ -665,7 +664,7 @@ def check_for_updates(show_message=True):
                     if messagebox.askyesno("Update Available", update_msg):
                         app_logger.info(f"User initiated update to version {latest_version}")
                         subprocess.Popen([sys.executable, "updater.py"])
-                        root.destroy() 
+                        root.destroy()
                 return True
             else:
                 if show_message:
@@ -689,11 +688,11 @@ def create_diagnostic_report():
             "Please share this file when reporting issues."
         )
 
-        if sys.platform == 'darwin': 
+        if sys.platform == 'darwin':
             subprocess.run(['open', os.path.dirname(report_path)])
-        elif sys.platform == 'win32':  
+        elif sys.platform == 'win32':
             subprocess.run(['explorer', os.path.dirname(report_path)])
-        else: 
+        else:
             subprocess.run(['xdg-open', os.path.dirname(report_path)])
             
         app_logger.info(f"Diagnostic report created: {report_path}")
@@ -702,6 +701,7 @@ def create_diagnostic_report():
         app_logger.error(f"Error creating diagnostic report: {e}", exc_info=True)
         messagebox.showerror("Error", f"Failed to create diagnostic report: {e}")
 
+def create_ui():
     """Create the application UI"""
     global root, start_btn, stop_btn, status_indicator, overlay_label
     global cps_var, duty_var, hold_var, button_var, mode_var, limit_var, limit_entry
@@ -712,7 +712,7 @@ def create_diagnostic_report():
     root.geometry("500x450")
     root.resizable(False, False)
 
-    if sys.platform == 'darwin': 
+    if sys.platform == 'darwin':
         try:
             from Cocoa import NSImage, NSApplication
             image = NSImage.alloc().initByReferencingFile_("icon.png")
@@ -748,7 +748,6 @@ def create_diagnostic_report():
     notebook.add(advanced_tab, text="Advanced")
     notebook.add(settings_tab, text="Settings")
     notebook.add(help_tab, text="Help")
-    
 
     status_frame = ttk.Frame(main_tab)
     status_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -873,7 +872,7 @@ def create_diagnostic_report():
     ttk.Label(about_frame, text="Aerout SpeedAutoClicker for macOS").pack(anchor=tk.W, padx=10, pady=2)
     ttk.Label(about_frame, text=f"Version {VERSION}").pack(anchor=tk.W, padx=10, pady=2)
     ttk.Label(about_frame, text="Created by Aerout").pack(anchor=tk.W, padx=10, pady=2)
-    
+
     help_text = """
     Aerout SpeedAutoClicker Help
     
