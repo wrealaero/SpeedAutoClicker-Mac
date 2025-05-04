@@ -1,99 +1,107 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+BOLD="\033[1m"
+RED="\033[91m"
+GREEN="\033[92m"
+YELLOW="\033[93m"
+BLUE="\033[94m"
+RESET="\033[0m"
 
-echo -e "${BLUE}"
-echo "  ___                  _    _       _        ___ _ _      _             "
-echo " / __|_ __  ___ ___ __| |  /_\  _  | |_ ___ / __| (_)__  | |_____ _ _   "
-echo " \__ \ '_ \/ -_) -_) _\` | / _ \| || |  _/ _ \ (__| | / _| | / / -_) '_|  " # ts so tuff boi
-echo " |___/ .__/\___\___\__,_|/_/ \_\\_,_|\__\___/\___|_|_\__| |_\_\___|_|    "
-echo "     |_|                                                                "
-echo -e "${NC}"
-echo -e "${GREEN}Installation Script${NC}"
-echo
-echo -e "${BLUE}=== AeroutClicker Installation Script ===${NC}"
-echo -e "${YELLOW}This script will install all required dependencies for AeroutClicker.${NC}"
-echo
+echo -e "${BOLD}${BLUE}==================================================${RESET}"
+echo -e "${BOLD}${BLUE}  Aerout SpeedAutoClicker for macOS - Installer   ${RESET}"
+echo -e "${BOLD}${BLUE}==================================================${RESET}"
+echo ""
 
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Python 3 is not installed.${NC}"
-    echo -e "Please install Python 3 using one of these methods:"
-    echo -e "1. Download from ${BLUE}https://www.python.org/downloads/macos/${NC}"
-    echo -e "2. Install using Homebrew: ${BLUE}brew install python3${NC}"
+if [ "$(uname)" != "Darwin" ]; then
+    echo -e "${RED}Error: This installer is for macOS only.${RESET}"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo -e "${YELLOW}Detected Python version: ${PYTHON_VERSION}${NC}"
-
-if ! python3 -m pip --version &> /dev/null; then
-    echo -e "${YELLOW}Installing pip...${NC}"
-    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-    python3 get-pip.py
-    rm get-pip.py
-fi
-
-echo -e "${YELLOW}Creating virtual environment...${NC}"
-python3 -m venv venv 2>/dev/null
-
-if [ -d "venv" ]; then
-    echo -e "${GREEN}Virtual environment created successfully.${NC}"
-    echo -e "${YELLOW}Activating virtual environment...${NC}"
-    source venv/bin/activate
-    USING_VENV=true
-else
-    echo -e "${YELLOW}Virtual environment creation failed, continuing with system Python...${NC}"
-    USING_VENV=false
-fi
-
-echo -e "${YELLOW}Installing dependencies...${NC}"
+MACOS_VERSION=$(sw_vers -productVersion)
+echo -e "${YELLOW}Detected macOS version: ${MACOS_VERSION}${RESET}"
 
 ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-    echo -e "${YELLOW}Detected Apple Silicon (M1/M2) Mac${NC}"
+echo -e "${YELLOW}Detected architecture: ${ARCH}${RESET}"
+echo ""
+
+echo -e "${BLUE}Checking for Python 3...${RESET}"
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_VERSION=$(python3 --version)
+    echo -e "${GREEN}Found ${PYTHON_VERSION}${RESET}"
 else
-    echo -e "${YELLOW}Detected Intel Mac${NC}"
+    echo -e "${RED}Python 3 not found. Please install Python 3 from python.org${RESET}"
+    echo -e "${YELLOW}Opening Python download page...${RESET}"
+    open "https://www.python.org/downloads/macos/"
+    exit 1
 fi
 
-python3 -m pip install --upgrade pip
+echo -e "${BLUE}Creating application directory...${RESET}"
+APP_DIR="$HOME/Applications/AeroutClicker"
+mkdir -p "$APP_DIR"
+echo -e "${GREEN}Created directory: ${APP_DIR}${RESET}"
 
-echo -e "${YELLOW}Installing six...${NC}"
-python3 -m pip install six || { echo -e "${RED}Failed to install six${NC}"; exit 1; }
+echo -e "${BLUE}Creating data directory...${RESET}"
+DATA_DIR="$HOME/Documents/AeroutClicker"
+mkdir -p "$DATA_DIR"
+mkdir -p "$DATA_DIR/configs"
+mkdir -p "$DATA_DIR/logs"
+echo -e "${GREEN}Created directory: ${DATA_DIR}${RESET}"
 
-echo -e "${YELLOW}Installing pynput...${NC}"
-python3 -m pip install pynput==1.7.6 || { echo -e "${RED}Failed to install pynput${NC}"; exit 1; }
+echo -e "${BLUE}Copying application files...${RESET}"
+cp -f autoclicker.py "$APP_DIR/"
+cp -f logger.py "$APP_DIR/"
+cp -f updater.py "$APP_DIR/"
+cp -f requirements.txt "$APP_DIR/"
+cp -f README.md "$APP_DIR/"
+cp -f LICENSE "$APP_DIR/"
 
-echo -e "${YELLOW}Installing PyObjC components...${NC}"
-python3 -m pip install pyobjc-core>=9.2 || { echo -e "${RED}Failed to install pyobjc-core${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-Cocoa>=9.2 || { echo -e "${RED}Failed to install pyobjc-framework-Cocoa${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-Quartz==9.2 || { echo -e "${RED}Failed to install pyobjc-framework-Quartz${NC}"; exit 1; }
-python3 -m pip install pyobjc-framework-ApplicationServices>=9.2 || { echo -e "${RED}Failed to install pyobjc-framework-ApplicationServices${NC}"; exit 1; }
+chmod +x "$APP_DIR/autoclicker.py"
+chmod +x "$APP_DIR/updater.py"
+echo -e "${GREEN}Files copied successfully${RESET}"
 
-chmod +x autoclicker.py
-
-echo -e "${GREEN}Installation complete!${NC}"
-
-echo -e "${BLUE}=== How to Run AeroutClicker ===${NC}"
-if [ "$USING_VENV" = true ]; then
-    echo -e "1. Activate the virtual environment: ${YELLOW}source venv/bin/activate${NC}"
-    echo -e "2. Run the autoclicker: ${YELLOW}python autoclicker.py${NC}"
-    echo -e "Or use the one-line command: ${YELLOW}source venv/bin/activate && python autoclicker.py${NC}"
+echo -e "${BLUE}Installing dependencies...${RESET}"
+python3 -m pip install --user -r requirements.txt
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Failed to install dependencies. Please try running:${RESET}"
+    echo -e "${YELLOW}python3 -m pip install --user -r requirements.txt${RESET}"
 else
-    echo -e "Run the autoclicker: ${YELLOW}python3 autoclicker.py${NC}"
+    echo -e "${GREEN}Dependencies installed successfully${RESET}"
 fi
 
-echo -e "${BLUE}=== Important Notice ===${NC}"
-echo -e "${YELLOW}You may need to grant accessibility permissions to use AeroutClicker.${NC}"
-echo -e "Go to System Preferences > Security & Privacy > Privacy > Accessibility"
-echo -e "and add Terminal or the Python application to the list of allowed apps."
+echo -e "${BLUE}Creating application launcher...${RESET}"
+LAUNCHER="$HOME/Applications/Aerout SpeedAutoClicker.command"
+cat > "$LAUNCHER" << EOF
+#!/bin/bash
+cd "$APP_DIR"
+python3 autoclicker.py
+EOF
+chmod +x "$LAUNCHER"
+echo -e "${GREEN}Launcher created: ${LAUNCHER}${RESET}"
 
-echo -e "${BLUE}=== Troubleshooting Tips ===${NC}"
-echo -e "If you encounter issues:"
-echo -e "1. Make sure you've granted accessibility permissions"
-echo -e "2. Try running with a specific Python version: ${YELLOW}python3.9 autoclicker.py${NC}"
-echo -e "3. For module errors, try reinstalling: ${YELLOW}pip3 install -r requirements.txt${NC}"
-echo -e "4. Join our Discord for help: ${BLUE}https://discord.gg/MxGV8fGzpR${NC}"
+echo -e "${BLUE}Creating desktop shortcut...${RESET}"
+DESKTOP_SHORTCUT="$HOME/Desktop/Aerout SpeedAutoClicker.command"
+ln -sf "$LAUNCHER" "$DESKTOP_SHORTCUT"
+echo -e "${GREEN}Desktop shortcut created${RESET}"
+
+echo ""
+echo -e "${BOLD}${GREEN}==================================================${RESET}"
+echo -e "${BOLD}${GREEN}  Aerout SpeedAutoClicker installed successfully!  ${RESET}"
+echo -e "${BOLD}${GREEN}==================================================${RESET}"
+echo ""
+echo -e "${YELLOW}To start the application:${RESET}"
+echo -e "  1. Double-click the 'Aerout SpeedAutoClicker' icon on your desktop"
+echo -e "  2. If you see a security warning, right-click the icon and select Open"
+echo ""
+echo -e "${YELLOW}Application data is stored in:${RESET}"
+echo -e "  ${DATA_DIR}"
+echo ""
+echo -e "${BLUE}Thank you for installing Aerout SpeedAutoClicker!${RESET}"
+
+echo ""
+read -p "Would you like to start the application now? (y/n): " START_NOW
+if [[ $START_NOW == "y" || $START_NOW == "Y" ]]; then
+    echo -e "${GREEN}Starting Aerout SpeedAutoClicker...${RESET}"
+    open "$LAUNCHER"
+fi
+
+exit 0
