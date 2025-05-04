@@ -1,394 +1,255 @@
 #!/usr/bin/env python3
-# Please tell me this works saw this online, yt, and on some other githubs please work please for the love of god works 
 """
-SpeedAutoClicker Updater
-Handles automatic updates from GitHub repository.
+Updater for Aerout SpeedAutoClicker
+Helps with handling downloades and installing updates
 """
 
 import os
 import sys
-import time
 import json
+import time
 import shutil
-import urllib.request
+import tempfile
 import subprocess
+import urllib.request
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
+from threading import Thread
 
-VERSION = "1.0.1"
 GITHUB_REPO = "wrealaero/SpeedAutoClicker-Mac"
-GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
-GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
-FILES_TO_UPDATE = [
-    "autoclicker.py",
-    "updater.py",
-    "install.sh",
-    "requirements.txt",
-    "README.md"
-]
+APP_NAME = "AeroutClicker"
 
-class UpdaterGUI:
-    """GUI for the updater application"""
-    
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title(f"SpeedAutoClicker Updater v{VERSION}")
-        self.root.geometry("450x350")
+class UpdaterApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Aerout SpeedAutoClicker Updater")
+        self.root.geometry("400x300")
         self.root.resizable(False, False)
 
-        self.style = ttk.Style()
-        self.style.configure("TFrame", padding=10)
-        self.style.configure("TLabel", padding=5)
-        self.style.configure("TProgressbar", thickness=15)
-        self.style.configure("Header.TLabel", font=("Arial", 12, "bold"))
-        self.style.configure("Title.TLabel", font=("Arial", 16, "bold"))
-        
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill="both", expand=True)
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
 
-        title_frame = ttk.Frame(main_frame)
-        title_frame.pack(fill="x", pady=(0, 20))
-        
-        title_label = ttk.Label(
-            title_frame, 
-            text="SpeedAutoClicker Updater",
-            style="Title.TLabel"
-        )
-        title_label.pack(anchor="center")
+        self.create_ui()
 
-        status_frame = ttk.Frame(main_frame)
-        status_frame.pack(fill="x", pady=10)
-        
-        self.status_var = tk.StringVar(value="Preparing to update...")
-        status_label = ttk.Label(
-            status_frame, 
-            textvariable=self.status_var,
-            font=("Arial", 11)
-        )
-        status_label.pack(anchor="w")
+        self.update_thread = Thread(target=self.update_process, daemon=True)
+        self.update_thread.start()
+    
+    def create_ui(self):
+        """Create the updater UI"""
+        main_frame = ttk.Frame(self.root, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        title_label = ttk.Label(main_frame, text="Updating Aerout SpeedAutoClicker", font=("Helvetica", 14, "bold"))
+        title_label.pack(pady=10)
+
+        self.status_var = tk.StringVar(value="Checking for updates...")
+        status_label = ttk.Label(main_frame, textvariable=self.status_var, wraplength=350)
+        status_label.pack(pady=10)
 
         self.progress_var = tk.DoubleVar(value=0.0)
-        self.progress_bar = ttk.Progressbar(
-            main_frame,
-            variable=self.progress_var,
-            mode="determinate",
-            length=400
-        )
-        self.progress_bar.pack(pady=20)
+        self.progress_bar = ttk.Progressbar(main_frame, variable=self.progress_var, length=350, mode="determinate")
+        self.progress_bar.pack(pady=10)
 
-        self.file_var = tk.StringVar(value="")
-        file_label = ttk.Label(
-            main_frame, 
-            textvariable=self.file_var,
-            font=("Arial", 10, "italic")
-        )
-        file_label.pack(anchor="w")
+        self.detail_var = tk.StringVar(value="")
+        detail_label = ttk.Label(main_frame, textvariable=self.detail_var, wraplength=350, foreground="gray")
+        detail_label.pack(pady=5)
 
-        log_frame = ttk.Frame(main_frame)
-        log_frame.pack(fill="both", expand=True, pady=10)
-        
-        log_label = ttk.Label(
-            log_frame,
-            text="Update Log:",
-            font=("Arial", 10, "bold")
-        )
-        log_label.pack(anchor="w")
-        
-        self.log_text = tk.Text(
-            log_frame,
-            height=6,
-            width=50,
-            font=("Courier", 9),
-            wrap="word",
-            state="disabled"
-        )
-        self.log_text.pack(fill="both", expand=True)
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=20, fill=tk.X)
 
-        buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.pack(fill="x", pady=(10, 0))
-        
-        self.cancel_button = ttk.Button(
-            buttons_frame, 
-            text="Cancel",
-            command=self.cancel_update
-        )
-        self.cancel_button.pack(side="right")
-
-        self.root.protocol("WM_DELETE_WINDOW", self.cancel_update)
-
-        self.root.after(1000, self.start_update)
-
-        self.updating = False
-        self.cancelled = False
-    
-    def log(self, message):
-        """Add a message to the log"""
-        self.log_text.config(state="normal")
-        self.log_text.insert("end", f"{message}\n")
-        self.log_text.see("end")
-        self.log_text.config(state="disabled")
-        self.root.update()
+        self.cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.cancel_update)
+        self.cancel_btn.pack(side=tk.RIGHT, padx=5)
     
     def update_status(self, message):
         """Update the status message"""
         self.status_var.set(message)
-        self.root.update()
+        self.root.update_idletasks()
+    
+    def update_detail(self, message):
+        """Update the detail message"""
+        self.detail_var.set(message)
+        self.root.update_idletasks()
     
     def update_progress(self, value):
         """Update the progress bar"""
         self.progress_var.set(value)
-        self.root.update()
-    
-    def update_file(self, filename):
-        """Update the current file being processed"""
-        self.file_var.set(f"Processing: {filename}")
-        self.root.update()
+        self.root.update_idletasks()
     
     def cancel_update(self):
         """Cancel the update process"""
-        if self.updating:
-            result = messagebox.askyesno(
-                "Cancel Update",
-                "Are you sure you want to cancel the update?\n\n"
-                "This may leave your installation in an inconsistent state."
-            )
-            
-            if result:
-                self.cancelled = True
-                self.update_status("Update cancelled.")
-                self.log("Update cancelled by user.")
-                self.root.after(2000, self.root.destroy)
-        else:
-            self.root.destroy()
+        self.update_status("Update cancelled")
+        self.root.after(1000, self.root.destroy)
     
-    def start_update(self):
-        """Start the update process"""
-        self.updating = True
-        self.cancelled = False
-        
+    def update_process(self):
+        """Main update process"""
         try:
-            self.update_status("Checking for latest version...")
-            self.update_progress(5)
-            
-            latest_version, download_url = self.get_latest_version()
-            if not latest_version:
-                self.update_status("Failed to get latest version information.")
-                self.log("Error: Could not retrieve version information from GitHub.")
-                self.finish_update(False)
-                return
-            
-            self.log(f"Latest version: {latest_version}")
+            self.update_status("Checking for updates...")
             self.update_progress(10)
             
-            if self.cancelled:
-                return
-
-            backup_dir = self.create_backup()
-            if not backup_dir:
-                self.update_status("Failed to create backup.")
-                self.log("Error: Could not create backup directory.")
-                self.finish_update(False)
+            latest_release = self.get_latest_release()
+            if not latest_release:
+                self.update_status("Failed to get update information")
+                self.update_detail("Please try again later or download manually from GitHub")
                 return
             
-            self.log(f"Created backup in: {backup_dir}")
             self.update_progress(20)
-            
-            if self.cancelled:
-                return
+            self.update_status(f"Found version {latest_release['tag_name']}")
+            self.update_detail("Preparing to download...")
 
-            success = self.update_files()
-            if not success:
-                self.update_status("Update failed. Restoring backup...")
-                self.log("Error during update. Restoring from backup...")
-                self.restore_backup(backup_dir)
-                self.finish_update(False)
+            self.update_status("Downloading update...")
+            download_url = self.get_download_url(latest_release)
+            if not download_url:
+                self.update_status("Failed to find download URL")
+                self.update_detail("Please download manually from GitHub")
                 return
             
-            self.update_progress(95)
+            self.update_detail(f"Downloading from {download_url}")
+            download_path = self.download_file(download_url)
+            if not download_path:
+                self.update_status("Download failed")
+                self.update_detail("Please check your internet connection and try again")
+                return
+            
+            self.update_progress(70)
+            self.update_status("Download complete")
+            self.update_detail("Preparing to install...")
 
-            try:
-                if os.path.exists(backup_dir):
-                    shutil.rmtree(backup_dir)
-                self.log("Backup cleaned up successfully.")
-            except Exception as e:
-                self.log(f"Warning: Could not clean up backup: {str(e)}")
+            self.update_status("Installing update...")
+            self.update_detail("This may take a moment...")
+            success = self.install_update(download_path)
             
-            self.update_progress(100)
-            self.update_status("Update completed successfully!")
-            self.log("Update completed successfully.")
-            self.finish_update(True)
-            
+            if success:
+                self.update_progress(100)
+                self.update_status("Update completed successfully!")
+                self.update_detail("The application will restart momentarily...")
+
+                self.cancel_btn.config(text="Close", command=self.restart_app)
+
+                self.root.after(3000, self.restart_app)
+            else:
+                self.update_status("Update failed")
+                self.update_detail("Please try again or download manually from GitHub")
+        
         except Exception as e:
-            self.update_status(f"Update failed: {str(e)}")
-            self.log(f"Error: {str(e)}")
-            self.finish_update(False)
+            self.update_status(f"Error during update: {str(e)}")
+            self.update_detail("Please try again later or download manually")
     
-    def get_latest_version(self):
-        """Get the latest version information from GitHub"""
+    def get_latest_release(self):
+        """Get information about the latest release from GitHub"""
         try:
             req = urllib.request.Request(
-                f"{GITHUB_API}/releases/latest",
-                headers={"User-Agent": f"SpeedAutoClicker-Updater/{VERSION}"}
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                headers={"User-Agent": f"{APP_NAME}/Updater"}
             )
-            
+
             with urllib.request.urlopen(req, timeout=10) as response:
-                data = json.loads(response.read().decode())
-                latest_version = data.get("tag_name", "").lstrip("v")
-                download_url = data.get("zipball_url")
-                
-                return latest_version, download_url
+                return json.loads(response.read().decode())
+        
         except Exception as e:
-            self.log(f"Error getting latest version: {str(e)}")
-            return None, None
-    
-    def create_backup(self):
-        """Create a backup of the current installation"""
-        try:
-            self.update_status("Creating backup...")
-
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            backup_dir = os.path.join(current_dir, f"backup_{timestamp}")
-            
-            if not os.path.exists(backup_dir):
-                os.makedirs(backup_dir)
-
-            for filename in FILES_TO_UPDATE:
-                src_path = os.path.join(current_dir, filename)
-                if os.path.exists(src_path):
-                    self.update_file(filename)
-                    shutil.copy2(src_path, os.path.join(backup_dir, filename))
-            
-            return backup_dir
-        except Exception as e:
-            self.log(f"Error creating backup: {str(e)}")
+            self.update_detail(f"Error checking for updates: {str(e)}")
             return None
     
-    def restore_backup(self, backup_dir):
-        """Restore files from backup"""
+    def get_download_url(self, release_data):
+        """Extract the download URL from the release data"""
         try:
-            self.update_status("Restoring from backup...")
-            
-            if not os.path.exists(backup_dir):
-                self.log("Error: Backup directory not found.")
-                return False
+            for asset in release_data.get("assets", []):
+                name = asset.get("name", "").lower()
 
-            current_dir = os.path.dirname(os.path.abspath(__file__))
+                if sys.platform == 'darwin' and ("mac" in name or "macos" in name or ".dmg" in name or ".zip" in name):
+                    return asset.get("browser_download_url")
 
-            for filename in FILES_TO_UPDATE:
-                backup_path = os.path.join(backup_dir, filename)
-                if os.path.exists(backup_path):
-                    self.update_file(filename)
-                    shutil.copy2(backup_path, os.path.join(current_dir, filename))
-            
-            self.log("Restored from backup successfully.")
-            return True
-        except Exception as e:
-            self.log(f"Error restoring backup: {str(e)}")
-            return False
-    
-    def update_files(self):
-        """Download and update all files"""
-        try:
-            self.update_status("Downloading updates...")
+                elif sys.platform == 'win32' and ("win" in name or "windows" in name or ".exe" in name or ".zip" in name):
+                    return asset.get("browser_download_url")
 
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-
-            total_files = len(FILES_TO_UPDATE)
-            for i, filename in enumerate(FILES_TO_UPDATE):
-                if self.cancelled:
-                    return False
-                
-                progress = 20 + (i / total_files) * 70
-                self.update_progress(progress)
-                self.update_file(filename)
-
-                file_url = f"{GITHUB_RAW}/{filename}"
-                try:
-                    req = urllib.request.Request(
-                        file_url,
-                        headers={"User-Agent": f"SpeedAutoClicker-Updater/{VERSION}"}
-                    )
-                    
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        content = response.read()
-
-                        file_path = os.path.join(current_dir, filename)
-                        with open(file_path, 'wb') as f:
-                            f.write(content)
-                        
-                        self.log(f"Updated: {filename}")
-                except Exception as e:
-                    self.log(f"Error updating {filename}: {str(e)}")
-                    return False
-            
-            return True
-        except Exception as e:
-            self.log(f"Error updating files: {str(e)}")
-            return False
-    
-    def finish_update(self, success):
-        """Finish the update process"""
-        self.updating = False
+            return release_data.get("zipball_url")
         
-        if success:
-            self.cancel_button.config(text="Close")
-
-            result = messagebox.askyesno(
-                "Update Complete",
-                "Update completed successfully!\n\n"
-                "Would you like to restart SpeedAutoClicker now?"
-            )
-            
-            if result:
-                self.restart_application()
-            else:
-                self.root.after(2000, self.root.destroy)
-        else:
-            self.cancel_button.config(text="Close")
-            
-            messagebox.showerror(
-                "Update Failed",
-                "The update process encountered errors.\n\n"
-                "Please check the log for details."
-            )
-    
-    def restart_application(self):
-        """Restart the main application"""
-        try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            main_script = os.path.join(current_dir, "autoclicker.py")
-            
-            if os.path.exists(main_script):
-                self.root.destroy()
-
-                subprocess.Popen([sys.executable, main_script])
         except Exception as e:
-            messagebox.showerror(
-                "Restart Failed",
-                f"Failed to restart the application: {str(e)}\n\n"
-                "Please start SpeedAutoClicker manually."
-            )
-            self.root.destroy()
+            self.update_detail(f"Error finding download URL: {str(e)}")
+            return None
     
-    def run(self):
-        """Start the GUI main loop"""
-        self.root.mainloop()
+    def download_file(self, url):
+        """Download a file from the given URL"""
+        try:
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+            temp_file.close()
+
+            def report_progress(block_num, block_size, total_size):
+                if total_size > 0:
+                    percent = min(block_num * block_size * 100 / total_size, 70)
+                    self.update_progress(20 + percent * 0.5)  # Scale to 20-70% range
+                    self.update_detail(f"Downloaded {block_num * block_size / 1024:.1f} KB of {total_size / 1024:.1f} KB")
+
+            urllib.request.urlretrieve(url, temp_file.name, reporthook=report_progress)
+            
+            return temp_file.name
+        
+        except Exception as e:
+            self.update_detail(f"Error downloading update: {str(e)}")
+            return None
+    
+    def install_update(self, download_path):
+        """Install the downloaded update"""
+        try:
+            temp_dir = tempfile.mkdtemp()
+
+            self.update_detail("Extracting files...")
+            shutil.unpack_archive(download_path, temp_dir)
+
+            app_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+            extracted_dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
+            if extracted_dirs:
+                extracted_dir = os.path.join(temp_dir, extracted_dirs[0])
+            else:
+                extracted_dir = temp_dir
+
+            self.update_detail("Copying new files...")
+            self.update_progress(80)
+
+            for file in os.listdir(extracted_dir):
+                if file.endswith(".py") or file == "requirements.txt":
+                    src = os.path.join(extracted_dir, file)
+                    dst = os.path.join(app_dir, file)
+                    shutil.copy2(src, dst)
+
+            self.update_detail("Cleaning up...")
+            self.update_progress(90)
+            try:
+                os.unlink(download_path)
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+            
+            return True
+        
+        except Exception as e:
+            self.update_detail(f"Error installing update: {str(e)}")
+            return False
+    
+    def restart_app(self):
+        """Restart the application"""
+        try:
+            app_path = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), "autoclicker.py"))
+
+            if sys.platform == 'darwin': 
+                subprocess.Popen(["python3", app_path])
+            else:
+                subprocess.Popen([sys.executable, app_path])
+
+            self.root.destroy()
+        
+        except Exception as e:
+            self.update_detail(f"Error restarting application: {str(e)}")
 
 def main():
     """Main entry point for the updater"""
-    try:
-        gui = UpdaterGUI()
-        gui.run()
-    except Exception as e:
-        print(f"Error: {e}")
-        messagebox.showerror(
-            "Error",
-            f"An error occurred: {str(e)}\n\n"
-            "Please download the latest version manually."
-        )
-        sys.exit(1)
+    root = tk.Tk()
+    app = UpdaterApp(root)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
