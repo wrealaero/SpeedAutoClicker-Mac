@@ -1,127 +1,102 @@
-# Aerout SpeedAutoClicker for macOS
+# 🚀 Aerout SpeedAutoClicker for macOS
 
-A high-performance autoclicker with advanced features, designed specifically for macOS.
+A high-performance autoclicker with advanced features for macOS.
 
 ![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Python](https://img.shields.io/badge/python-3.6%2B-green)
 
-## Features
+## ✨ Features
 
-- **High Performance**: Optimized for speed and reliability
-- **Flexible Clicking**: Adjust CPS (clicks per second) from 0.1 to 1000+
-- **Multiple Mouse Buttons**: Support for left, right, and middle mouse buttons
-- **Advanced Controls**: Customize duty cycle and hold time for precise clicking patterns
-- **Hotkey Support**: Configurable keyboard shortcuts to control the autoclicker
-- **Click Modes**: Toggle mode and hold mode for different use cases
+- **High Performance**: Optimized for speed and low CPU usage
+- **Multiple Click Modes**: Toggle or Hold modes
+- **Custom CPS**: Set your desired Clicks Per Second
+- **Advanced Click Patterns**: Control duty cycle and hold time
 - **Click Limiting**: Set a maximum number of clicks
-- **Configuration Profiles**: Save and load different clicking configurations
-- **Customizable UI**: Multiple themes and color options
-- **Diagnostic Tools**: Built-in logging and diagnostic reporting
+- **Custom Hotkeys**: Use keyboard or mouse buttons as triggers
+- **Configuration Profiles**: Save and load different clicking setups
+- **Custom Themes**: Personalize your autoclicker with custom color schemes
+- **Diagnostic Tools**: Built-in logging and troubleshooting reports
 
-## Installation
+## 📋 Requirements
 
-### Method 1: Installer Script
+- macOS High Sierra (10.13) or newer
+- Python 3.6 or newer
+- Required Python packages (automatically installed):
+  - pyautogui
+  - pynput
+  - packaging
+  - requests
+
+## 🔧 Installation
+
+### Easy Install
 
 1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
 2. Extract the ZIP file
-3. Open Terminal and navigate to the extracted folder
-4. Run the installer script:
-   ```bash
+3. Run the installer script:
+   ```
    ./install.sh
    ```
-5. Follow the on-screen instructions
+4. Follow the on-screen instructions
 
-### Method 2: Manual Installation
+### Manual Installation
 
-1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
-2. Extract the ZIP file to a location of your choice
-3. Install the required dependencies:
-   ```bash
-   python3 -m pip install --user -r requirements.txt
+1. Clone the repository:
    ```
-4. Run the application:
-   ```bash
+   git clone https://github.com/wrealaero/SpeedAutoClicker-Mac.git
+   ```
+2. Install the required packages:
+   ```
+   pip3 install -r requirements.txt
+   ```
+3. Run the application:
+   ```
    python3 autoclicker.py
    ```
 
-## Usage
+## 🎮 Usage
 
-### Basic Usage
+1. **Set Your Clicking Speed**:
+   - Enter your desired Clicks Per Second (CPS)
 
-1. Set your desired Clicks Per Second (CPS)
-2. Choose which mouse button to click
-3. Select Toggle or Hold mode
-4. Press the hotkey (default: F6) to start/stop clicking
+2. **Choose Mouse Button**:
+   - Select which mouse button to click: Left, Right, or Middle
+
+3. **Select Click Mode**:
+   - **Toggle Mode**: Press hotkey once to start clicking, press again to stop
+   - **Hold Mode**: Clicking continues only while you hold down the hotkey
+
+4. **Start/Stop Clicking**:
+   - Press the default hotkey (F6) to start clicking
+   - In Toggle Mode, press F6 again to stop
+   - In Hold Mode, release F6 to stop
+   - You can also use the Start/Stop buttons in the app
 
 ### Advanced Features
 
-- **Duty Cycle**: Controls how long the mouse button is held down
-  - 50% is balanced (equal press and release time)
-  - Higher values make the press longer
-  - Lower values make the release longer
+- **Duty Cycle**: Controls how long each click is held down
+- **Hold Time**: Set exact milliseconds for button press duration
+- **Click Limiting**: Set a maximum number of clicks to perform
+- **Custom Hotkeys**: Change the activation key or mouse button
+- **Configurations**: Save different settings for different applications
+- **Themes**: Choose between Default, Light, Dark, or Custom themes
 
-- **Hold Time**: Precise control over button press duration in milliseconds
-  - Set to 0 to use the duty cycle instead
+## 🤝 Support
 
-- **Click Limit**: Automatically stop after a specific number of clicks
+If you encounter any issues or have questions:
 
-- **Configurations**: Save and load different clicking profiles for various use cases
+- Join our [Discord server](https://discord.gg/shA7X2Wesr) for help and updates
+- Create an issue on GitHub
+- Use the built-in diagnostic tool to generate a report
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Hotkeys Not Working**
-   - Make sure you've granted accessibility permissions to the application
-   - Try running the app with administrator privileges
-   - Check if another application is using the same hotkey
-
-2. **Clicking Not Working**
-   - Verify that the application has accessibility permissions
-   - Try a different mouse button
-   - Restart the application
-
-3. **Application Won't Start**
-   - Check if Python 3 is installed correctly
-   - Verify that all dependencies are installed
-   - Check the logs for error messages
-
-### Diagnostic Report
-
-If you encounter issues, you can generate a diagnostic report:
-
-1. Go to the "Advanced" tab
-2. Click "Create Diagnostic Report"
-3. Share this report when seeking help
-
-## Privacy
-
-Aerout SpeedAutoClicker respects your privacy:
-
-- No data is sent to any servers
-- All logs and configurations are stored locally on your computer
-- No personal information is collected
-
-## System Requirements
-
-- macOS 10.13 (High Sierra) or later
-- Python 3.7 or later
-- 50MB of disk space
-- Administrative privileges for installation
-
-## License
+## 📝 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgements
 
-- Thanks to all contributors and testers (Lighting, Cretz, etc..)
-- Special thanks to the Python community for the excellent libraries
-
-## Contact & Support
-
-For bug reports and feature requests, please use the [GitHub Issues page](https://github.com/wrealaero/SpeedAutoClicker-Mac/issues).
+- Thanks to all contributors and testers
 
 ---
 
