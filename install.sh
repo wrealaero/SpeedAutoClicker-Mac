@@ -1,107 +1,100 @@
 #!/bin/bash
 
-BOLD="\033[1m"
-RED="\033[91m"
-GREEN="\033[92m"
-YELLOW="\033[93m"
-BLUE="\033[94m"
-RESET="\033[0m"
+# Aerout SpeedAutoClicker Installer
+# This script installs or updates the Aerout SpeedAutoClicker application
 
-echo -e "${BOLD}${BLUE}==================================================${RESET}"
-echo -e "${BOLD}${BLUE}  Aerout SpeedAutoClicker for macOS - Installer   ${RESET}"
-echo -e "${BOLD}${BLUE}==================================================${RESET}"
-echo ""
+# Set colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' 
 
-if [ "$(uname)" != "Darwin" ]; then
-    echo -e "${RED}Error: This installer is for macOS only.${RESET}"
+echo -e "${BLUE}"
+echo "  ___                  _    _       _        ___ _ _      _             "
+echo " / __|_ __  ___ ___ __| |  /_\  _  | |_ ___ / __| (_)__  | |_____ _ _   "
+echo " \__ \ '_ \/ -_) -_) _\` | / _ \| || |  _/ _ \ (__| | / _| | / / -_) '_|  " # ts so tuff boi
+echo " |___/ .__/\___\___\__,_|/_/ \_\\_,_|\__\___/\___|_|_\__| |_\_\___|_|    "
+echo "     |_|                                                                "
+echo -e "${NC}"
+echo -e "${GREEN}Installation Script${NC}"
+echo
+
+if [[ "$OSTYPE" != "darwin"* ]]; then
+    echo -e "${RED}Error: This installer is only for macOS systems.${NC}"
+    exit 1
+fi
+INSTALL_DIR="$HOME/Applications/AeroutClicker"
+DESKTOP_SHORTCUT="$HOME/Desktop/AeroutClicker.command"
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "Checking Python version..."
+if ! command -v python3 &> /dev/null; then
+    echo -e "${RED}Error: Python 3 is not installed.${NC}"
+    echo "Please install Python 3.6 or higher from https://www.python.org/downloads/"
     exit 1
 fi
 
-MACOS_VERSION=$(sw_vers -productVersion)
-echo -e "${YELLOW}Detected macOS version: ${MACOS_VERSION}${RESET}"
-
-ARCH=$(uname -m)
-echo -e "${YELLOW}Detected architecture: ${ARCH}${RESET}"
-echo ""
-
-echo -e "${BLUE}Checking for Python 3...${RESET}"
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON_VERSION=$(python3 --version)
-    echo -e "${GREEN}Found ${PYTHON_VERSION}${RESET}"
-else
-    echo -e "${RED}Python 3 not found. Please install Python 3 from python.org${RESET}"
-    echo -e "${YELLOW}Opening Python download page...${RESET}"
-    open "https://www.python.org/downloads/macos/"
+PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+if (( $(echo "$PYTHON_VERSION < 3.6" | bc -l) )); then
+    echo -e "${RED}Error: Python 3.6 or higher is required.${NC}"
+    echo "Current version: $PYTHON_VERSION"
+    echo "Please update Python from https://www.python.org/downloads/"
     exit 1
 fi
 
-echo -e "${BLUE}Creating application directory...${RESET}"
-APP_DIR="$HOME/Applications/AeroutClicker"
-mkdir -p "$APP_DIR"
-echo -e "${GREEN}Created directory: ${APP_DIR}${RESET}"
+echo -e "${GREEN}Python $PYTHON_VERSION detected.${NC}"
 
-echo -e "${BLUE}Creating data directory...${RESET}"
-DATA_DIR="$HOME/Documents/AeroutClicker"
-mkdir -p "$DATA_DIR"
-mkdir -p "$DATA_DIR/configs"
-mkdir -p "$DATA_DIR/logs"
-echo -e "${GREEN}Created directory: ${DATA_DIR}${RESET}"
+echo "Installing required packages..."
+pip3 install --user pyautogui pynput packaging requests
 
-echo -e "${BLUE}Copying application files...${RESET}"
-cp -f autoclicker.py "$APP_DIR/"
-cp -f logger.py "$APP_DIR/"
-cp -f updater.py "$APP_DIR/"
-cp -f requirements.txt "$APP_DIR/"
-cp -f README.md "$APP_DIR/"
-cp -f LICENSE "$APP_DIR/"
+echo "Creating installation directory..."
+mkdir -p "$INSTALL_DIR"
 
-chmod +x "$APP_DIR/autoclicker.py"
-chmod +x "$APP_DIR/updater.py"
-echo -e "${GREEN}Files copied successfully${RESET}"
+echo "Copying files..."
+cp -R "$CURRENT_DIR"/* "$INSTALL_DIR/"
 
-echo -e "${BLUE}Installing dependencies...${RESET}"
-python3 -m pip install --user -r requirements.txt
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to install dependencies. Please try running:${RESET}"
-    echo -e "${YELLOW}python3 -m pip install --user -r requirements.txt${RESET}"
-else
-    echo -e "${GREEN}Dependencies installed successfully${RESET}"
-fi
+echo "Setting permissions..."
+chmod +x "$INSTALL_DIR/autoclicker.py"
+chmod +x "$INSTALL_DIR/updater.py"
+chmod +x "$INSTALL_DIR/install.sh"
 
-echo -e "${BLUE}Creating application launcher...${RESET}"
-LAUNCHER="$HOME/Applications/Aerout SpeedAutoClicker.command"
-cat > "$LAUNCHER" << EOF
+echo "Creating desktop shortcut..."
+cat > "$DESKTOP_SHORTCUT" << EOF
 #!/bin/bash
-cd "$APP_DIR"
+cd "$INSTALL_DIR"
 python3 autoclicker.py
 EOF
-chmod +x "$LAUNCHER"
-echo -e "${GREEN}Launcher created: ${LAUNCHER}${RESET}"
+chmod +x "$DESKTOP_SHORTCUT"
 
-echo -e "${BLUE}Creating desktop shortcut...${RESET}"
-DESKTOP_SHORTCUT="$HOME/Desktop/Aerout SpeedAutoClicker.command"
-ln -sf "$LAUNCHER" "$DESKTOP_SHORTCUT"
-echo -e "${GREEN}Desktop shortcut created${RESET}"
-
-echo ""
-echo -e "${BOLD}${GREEN}==================================================${RESET}"
-echo -e "${BOLD}${GREEN}  Aerout SpeedAutoClicker installed successfully!  ${RESET}"
-echo -e "${BOLD}${GREEN}==================================================${RESET}"
-echo ""
-echo -e "${YELLOW}To start the application:${RESET}"
-echo -e "  1. Double-click the 'Aerout SpeedAutoClicker' icon on your desktop"
-echo -e "  2. If you see a security warning, right-click the icon and select Open"
-echo ""
-echo -e "${YELLOW}Application data is stored in:${RESET}"
-echo -e "  ${DATA_DIR}"
-echo ""
-echo -e "${BLUE}Thank you for installing Aerout SpeedAutoClicker!${RESET}"
-
-echo ""
-read -p "Would you like to start the application now? (y/n): " START_NOW
-if [[ $START_NOW == "y" || $START_NOW == "Y" ]]; then
-    echo -e "${GREEN}Starting Aerout SpeedAutoClicker...${RESET}"
-    open "$LAUNCHER"
+if [ ! -f "$INSTALL_DIR/version.txt" ]; then
+    echo "1.1.0" > "$INSTALL_DIR/version.txt"
 fi
+
+mkdir -p "$HOME/Documents/AeroutClicker/logs"
+mkdir -p "$HOME/Documents/AeroutClicker/configs"
+mkdir -p "$HOME/Documents/AeroutClicker/diagnostics"
+
+echo -e "${GREEN}Installation complete!${NC}"
+echo ""
+echo "You can start Aerout SpeedAutoClicker by:"
+echo "1. Double-clicking the shortcut on your Desktop"
+echo "2. Running 'python3 $INSTALL_DIR/autoclicker.py'"
+echo ""
+echo -e "${BLUE}Note: On first run, you may need to grant accessibility permissions${NC}"
+echo "This is required for the autoclicker to function properly."
+echo ""
+echo -e "${GREEN}Thank you for installing Aerout SpeedAutoClicker!${NC}"
+echo "Join our Discord server for updates and help: https://discord.gg/shA7X2Wesr"
+
+read -p "Would you like to run Aerout SpeedAutoClicker now? (y/n): " choice
+case "$choice" in 
+  y|Y ) 
+    echo "Starting Aerout SpeedAutoClicker..."
+    cd "$INSTALL_DIR" && python3 autoclicker.py
+    ;;
+  * ) 
+    echo "You can run Aerout SpeedAutoClicker later using the desktop shortcut."
+    ;;
+esac
 
 exit 0
