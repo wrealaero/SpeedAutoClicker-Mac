@@ -1,4 +1,3 @@
-
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,8 +18,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-venv/
-
+logs/
+*.log
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -33,13 +32,13 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
-
-
+dist/
+build/
+venv/
+ENV/
 .idea/
 .vscode/
 *.swp
 *.swo
-
-
-.aeroutclicker_settings.json
-
+# Application specific
+diagnostics/
