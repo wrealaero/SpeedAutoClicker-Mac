@@ -632,7 +632,9 @@ def on_key_press(key):
     global capturing_hotkey
     
     try:
-        if capturing_hotkey
+
+        if capturing_hotkey:
+
             if hasattr(key, 'char') and key.char:
                 key_str = key.char
             elif hasattr(key, 'name'):
@@ -653,6 +655,7 @@ def on_key_press(key):
             return False
 
         if hotkey["type"] == "keyboard" and not clicking:
+
             if hasattr(key, 'char') and key.char:
                 key_str = key.char
             elif hasattr(key, 'name'):
@@ -672,7 +675,7 @@ def on_key_press(key):
         app_logger.error(f"Error in key press handler: {e}", exc_info=True)
     
     return True
-
+    
 def on_key_release(key):
     """Handle key release events"""
     try:
