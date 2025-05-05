@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Updater for Aerout SpeedAutoClicker
-Helps with handling downloades and installing updates
+Updater module for Aerout SpeedAutoClicker
+Checks for Updates
 """
 
 import os
@@ -11,244 +11,260 @@ import time
 import shutil
 import tempfile
 import subprocess
-import urllib.request
 import tkinter as tk
-from tkinter import ttk
-from threading import Thread
+from tkinter import ttk, messagebox
+import requests
+from packaging import version
 
+VERSION_FILE = os.path.join(os.path.dirname(__file__), "version.txt")
 GITHUB_REPO = "wrealaero/SpeedAutoClicker-Mac"
-APP_NAME = "AeroutClicker"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-class UpdaterApp:
+def get_current_version():
+    """Get the current version of the application"""
+    try:
+        if os.path.exists(VERSION_FILE):
+            with open(VERSION_FILE, "r") as f:
+                return f.read().strip()
+        return "0.0.0"
+    except Exception as e:
+        print(f"Error getting current version: {e}")
+        return "0.0.0"
+
+def check_for_updates():
+    """Check for updates from GitHub"""
+    try:
+        current_version = get_current_version()
+
+        response = requests.get(
+            GITHUB_API_URL,
+            headers={"User-Agent": f"AeroutClicker/{current_version}"},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            release_info = response.json()
+            latest_version = release_info["tag_name"].lstrip("v")
+
+            if version.parse(latest_version) > version.parse(current_version):
+                return {
+                    "available": True,
+                    "current_version": current_version,
+                    "latest_version": latest_version,
+                    "release_notes": release_info["body"],
+                    "download_url": release_info["assets"][0]["browser_download_url"] if release_info["assets"] else None
+                }
+            else:
+                return {
+                    "available": False,
+                    "current_version": current_version,
+                    "latest_version": latest_version
+                }
+        else:
+            return {
+                "available": False,
+                "error": f"Failed to check for updates: HTTP {response.status_code}"
+            }
+    
+    except Exception as e:
+        print(f"Error checking for updates: {e}")
+        return {
+            "available": False,
+            "error": f"Error checking for updates: {e}"
+        }
+
+def download_update(url, progress_callback=None):
+    """Download the update file"""
+    try:
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, "update.zip")
+
+        response = requests.get(url, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 1024 
+        
+        with open(zip_path, 'wb') as f:
+            downloaded = 0
+            for data in response.iter_content(block_size):
+                f.write(data)
+                downloaded += len(data)
+                if progress_callback and total_size > 0:
+                    progress = (downloaded / total_size) * 100
+                    progress_callback(progress)
+        
+        return zip_path
+    
+    except Exception as e:
+        print(f"Error downloading update: {e}")
+        return None
+
+def install_update(zip_path, progress_callback=None):
+    """Install the update"""
+    try:
+        extract_dir = tempfile.mkdtemp()
+
+        import zipfile
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            total_files = len(zip_ref.namelist())
+            for i, file in enumerate(zip_ref.namelist()):
+                zip_ref.extract(file, extract_dir)
+                if progress_callback:
+                    progress = (i / total_files) * 100
+                    progress_callback(progress)
+
+        main_dir = None
+        for item in os.listdir(extract_dir):
+            if os.path.isdir(os.path.join(extract_dir, item)):
+                main_dir = os.path.join(extract_dir, item)
+                break
+        
+        if not main_dir:
+            main_dir = extract_dir
+
+        for item in os.listdir(main_dir):
+            src = os.path.join(main_dir, item)
+            dst = os.path.join(APP_DIR, item)
+            
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+
+        shutil.rmtree(extract_dir)
+        os.remove(zip_path)
+        
+        return True
+    
+    except Exception as e:
+        print(f"Error installing update: {e}")
+        return False
+
+class UpdaterUI:
+    """UI for the updater"""
+    
     def __init__(self, root):
+        """Initialize the updater UI"""
         self.root = root
         self.root.title("Aerout SpeedAutoClicker Updater")
-        self.root.geometry("400x300")
+        self.root.geometry("500x400")
         self.root.resizable(False, False)
 
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        self.main_frame = ttk.Frame(self.root, padding=20)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.create_ui()
-
-        self.update_thread = Thread(target=self.update_process, daemon=True)
-        self.update_thread.start()
-    
-    def create_ui(self):
-        """Create the updater UI"""
-        main_frame = ttk.Frame(self.root, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        title_label = ttk.Label(main_frame, text="Updating Aerout SpeedAutoClicker", font=("Helvetica", 14, "bold"))
-        title_label.pack(pady=10)
+        self.title_label = ttk.Label(self.main_frame, text="Aerout SpeedAutoClicker Updater", font=("Helvetica", 16, "bold"))
+        self.title_label.pack(pady=10)
 
         self.status_var = tk.StringVar(value="Checking for updates...")
-        status_label = ttk.Label(main_frame, textvariable=self.status_var, wraplength=350)
-        status_label.pack(pady=10)
+        self.status_label = ttk.Label(self.main_frame, textvariable=self.status_var, wraplength=460)
+        self.status_label.pack(pady=10)
 
-        self.progress_var = tk.DoubleVar(value=0.0)
-        self.progress_bar = ttk.Progressbar(main_frame, variable=self.progress_var, length=350, mode="determinate")
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_bar = ttk.Progressbar(self.main_frame, variable=self.progress_var, length=460, mode="determinate")
         self.progress_bar.pack(pady=10)
 
-        self.detail_var = tk.StringVar(value="")
-        detail_label = ttk.Label(main_frame, textvariable=self.detail_var, wraplength=350, foreground="gray")
-        detail_label.pack(pady=5)
+        self.notes_frame = ttk.LabelFrame(self.main_frame, text="Release Notes", padding=10)
+        self.notes_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.notes_text = tk.Text(self.notes_frame, height=10, wrap=tk.WORD)
+        self.notes_text.pack(fill=tk.BOTH, expand=True)
+        self.notes_text.config(state=tk.DISABLED)
 
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=20, fill=tk.X)
+        self.button_frame = ttk.Frame(self.main_frame)
+        self.button_frame.pack(fill=tk.X, pady=10)
+        
+        self.update_button = ttk.Button(self.button_frame, text="Update", command=self.start_update, state=tk.DISABLED)
+        self.update_button.pack(side=tk.RIGHT, padx=5)
+        
+        self.cancel_button = ttk.Button(self.button_frame, text="Cancel", command=self.root.destroy)
+        self.cancel_button.pack(side=tk.RIGHT, padx=5)
 
-        self.cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.cancel_update)
-        self.cancel_btn.pack(side=tk.RIGHT, padx=5)
+        self.root.after(500, self.check_updates)
     
-    def update_status(self, message):
-        """Update the status message"""
-        self.status_var.set(message)
-        self.root.update_idletasks()
+    def check_updates(self):
+        """Check for updates"""
+        try:
+            self.status_var.set("Checking for updates...")
+            self.progress_var.set(0)
+
+            update_info = check_for_updates()
+            
+            if "error" in update_info:
+                self.status_var.set(f"Error: {update_info['error']}")
+                return
+            
+            if update_info["available"]:
+                self.status_var.set(f"Update available: v{update_info['latest_version']} (Current: v{update_info['current_version']})")
+                self.update_button.config(state=tk.NORMAL)
+
+                self.notes_text.config(state=tk.NORMAL)
+                self.notes_text.delete(1.0, tk.END)
+                self.notes_text.insert(tk.END, update_info["release_notes"])
+                self.notes_text.config(state=tk.DISABLED)
+
+                self.download_url = update_info["download_url"]
+            else:
+                self.status_var.set(f"You have the latest version (v{update_info['current_version']})")
+        
+        except Exception as e:
+            self.status_var.set(f"Error checking for updates: {e}")
     
-    def update_detail(self, message):
-        """Update the detail message"""
-        self.detail_var.set(message)
-        self.root.update_idletasks()
-    
-    def update_progress(self, value):
+    def update_progress(self, progress):
         """Update the progress bar"""
-        self.progress_var.set(value)
+        self.progress_var.set(progress)
         self.root.update_idletasks()
     
-    def cancel_update(self):
-        """Cancel the update process"""
-        self.update_status("Update cancelled")
-        self.root.after(1000, self.root.destroy)
-    
-    def update_process(self):
-        """Main update process"""
+    def start_update(self):
+        """Start the update process"""
         try:
-            self.update_status("Checking for updates...")
-            self.update_progress(10)
+            self.update_button.config(state=tk.DISABLED)
+            self.cancel_button.config(state=tk.DISABLED)
+
+            self.status_var.set("Downloading update...")
+            self.progress_var.set(0)
             
-            latest_release = self.get_latest_release()
-            if not latest_release:
-                self.update_status("Failed to get update information")
-                self.update_detail("Please try again later or download manually from GitHub")
+            zip_path = download_update(self.download_url, self.update_progress)
+            if not zip_path:
+                self.status_var.set("Error downloading update")
+                self.cancel_button.config(state=tk.NORMAL)
                 return
-            
-            self.update_progress(20)
-            self.update_status(f"Found version {latest_release['tag_name']}")
-            self.update_detail("Preparing to download...")
 
-            self.update_status("Downloading update...")
-            download_url = self.get_download_url(latest_release)
-            if not download_url:
-                self.update_status("Failed to find download URL")
-                self.update_detail("Please download manually from GitHub")
+            self.status_var.set("Installing update...")
+            self.progress_var.set(0)
+            
+            success = install_update(zip_path, self.update_progress)
+            if not success:
+                self.status_var.set("Error installing update")
+                self.cancel_button.config(state=tk.NORMAL)
                 return
-            
-            self.update_detail(f"Downloading from {download_url}")
-            download_path = self.download_file(download_url)
-            if not download_path:
-                self.update_status("Download failed")
-                self.update_detail("Please check your internet connection and try again")
-                return
-            
-            self.update_progress(70)
-            self.update_status("Download complete")
-            self.update_detail("Preparing to install...")
 
-            self.update_status("Installing update...")
-            self.update_detail("This may take a moment...")
-            success = self.install_update(download_path)
-            
-            if success:
-                self.update_progress(100)
-                self.update_status("Update completed successfully!")
-                self.update_detail("The application will restart momentarily...")
+            self.status_var.set("Update complete! Restarting application...")
+            self.progress_var.set(100)
 
-                self.cancel_btn.config(text="Close", command=self.restart_app)
-
-                self.root.after(3000, self.restart_app)
-            else:
-                self.update_status("Update failed")
-                self.update_detail("Please try again or download manually from GitHub")
+            self.root.after(2000, self.restart_app)
         
         except Exception as e:
-            self.update_status(f"Error during update: {str(e)}")
-            self.update_detail("Please try again later or download manually")
-    
-    def get_latest_release(self):
-        """Get information about the latest release from GitHub"""
-        try:
-            req = urllib.request.Request(
-                f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
-                headers={"User-Agent": f"{APP_NAME}/Updater"}
-            )
-
-            with urllib.request.urlopen(req, timeout=10) as response:
-                return json.loads(response.read().decode())
-        
-        except Exception as e:
-            self.update_detail(f"Error checking for updates: {str(e)}")
-            return None
-    
-    def get_download_url(self, release_data):
-        """Extract the download URL from the release data"""
-        try:
-            for asset in release_data.get("assets", []):
-                name = asset.get("name", "").lower()
-
-                if sys.platform == 'darwin' and ("mac" in name or "macos" in name or ".dmg" in name or ".zip" in name):
-                    return asset.get("browser_download_url")
-
-                elif sys.platform == 'win32' and ("win" in name or "windows" in name or ".exe" in name or ".zip" in name):
-                    return asset.get("browser_download_url")
-
-            return release_data.get("zipball_url")
-        
-        except Exception as e:
-            self.update_detail(f"Error finding download URL: {str(e)}")
-            return None
-    
-    def download_file(self, url):
-        """Download a file from the given URL"""
-        try:
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
-            temp_file.close()
-
-            def report_progress(block_num, block_size, total_size):
-                if total_size > 0:
-                    percent = min(block_num * block_size * 100 / total_size, 70)
-                    self.update_progress(20 + percent * 0.5)  # Scale to 20-70% range
-                    self.update_detail(f"Downloaded {block_num * block_size / 1024:.1f} KB of {total_size / 1024:.1f} KB")
-
-            urllib.request.urlretrieve(url, temp_file.name, reporthook=report_progress)
-            
-            return temp_file.name
-        
-        except Exception as e:
-            self.update_detail(f"Error downloading update: {str(e)}")
-            return None
-    
-    def install_update(self, download_path):
-        """Install the downloaded update"""
-        try:
-            temp_dir = tempfile.mkdtemp()
-
-            self.update_detail("Extracting files...")
-            shutil.unpack_archive(download_path, temp_dir)
-
-            app_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-
-            extracted_dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
-            if extracted_dirs:
-                extracted_dir = os.path.join(temp_dir, extracted_dirs[0])
-            else:
-                extracted_dir = temp_dir
-
-            self.update_detail("Copying new files...")
-            self.update_progress(80)
-
-            for file in os.listdir(extracted_dir):
-                if file.endswith(".py") or file == "requirements.txt":
-                    src = os.path.join(extracted_dir, file)
-                    dst = os.path.join(app_dir, file)
-                    shutil.copy2(src, dst)
-
-            self.update_detail("Cleaning up...")
-            self.update_progress(90)
-            try:
-                os.unlink(download_path)
-                shutil.rmtree(temp_dir)
-            except:
-                pass
-            
-            return True
-        
-        except Exception as e:
-            self.update_detail(f"Error installing update: {str(e)}")
-            return False
+            self.status_var.set(f"Error during update: {e}")
+            self.cancel_button.config(state=tk.NORMAL)
     
     def restart_app(self):
         """Restart the application"""
         try:
-            app_path = os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]), "autoclicker.py"))
-
-            if sys.platform == 'darwin': 
-                subprocess.Popen(["python3", app_path])
-            else:
-                subprocess.Popen([sys.executable, app_path])
+            subprocess.Popen([sys.executable, os.path.join(APP_DIR, "autoclicker.py")])
 
             self.root.destroy()
         
         except Exception as e:
-            self.update_detail(f"Error restarting application: {str(e)}")
+            self.status_var.set(f"Error restarting application: {e}")
+            self.cancel_button.config(state=tk.NORMAL)
 
 def main():
-    """Main entry point for the updater"""
+    """Main function"""
     root = tk.Tk()
-    app = UpdaterApp(root)
+    app = UpdaterUI(root)
     root.mainloop()
 
 if __name__ == "__main__":
