@@ -946,7 +946,7 @@ def create_ui():
     about_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     about_text.insert(tk.END, "Aerout SpeedAutoClicker for macOS\n\n")
     about_text.insert(tk.END, "A high-performance autoclicker with advanced features.\n\n")
-    about_text.insert(tk.END, "© 2023 Aerout\n\n")
+    about_text.insert(tk.END, "© 2025 Aerout\n\n")
     about_text.insert(tk.END, "Join our Discord server for updates and help:\nhttps://discord.gg/shA7X2Wesr")
     about_text.config(state=tk.DISABLED)
 
