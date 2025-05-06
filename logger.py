@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Logger module for Aerout SpeedAutoClicker
-Handles logging of clicker events and click data
+Takes care logging of Aerout SpeedAutoclicker :D
 """
 
 import os
