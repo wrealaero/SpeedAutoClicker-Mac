@@ -1,997 +1,1280 @@
 #!/usr/bin/env python3
-"""
-Aerout SpeedAutoClicker for macOS
-A good autoclicker with cool features :D
-"""
-
 import os
 import sys
 import json
 import time
 import threading
-import subprocess
 import tkinter as tk
-from tkinter import ttk, messagebox, colorchooser
+from tkinter import ttk, messagebox, colorchooser, filedialog
+import webbrowser
+import subprocess
 from datetime import datetime
-import pyautogui
-from pynput import keyboard, mouse
-from logger import app_logger
-from packaging import version
+import platform
+import re
 
-VERSION = "1.1.0"
-CONFIG_DIR = os.path.expanduser("~/Documents/AeroutClicker/configs")
-SETTINGS_FILE = os.path.expanduser("~/Documents/AeroutClicker/settings.json")
+try:
+    from Quartz import (
+        CGEventCreate, CGEventGetLocation, CGEventCreateMouseEvent,
+        CGEventPost, CGEventSetIntegerValueField, CGEventSourceCreate,
+        kCGEventLeftMouseDown, kCGEventLeftMouseUp,
+        kCGEventRightMouseDown, kCGEventRightMouseUp,
+        kCGEventOtherMouseDown, kCGEventOtherMouseUp,
+        kCGMouseButtonLeft, kCGMouseButtonRight, kCGMouseButtonCenter,
+        kCGHIDEventTap, kCGEventSourceStateHIDSystemState
+    )
+except ImportError as e:
+    print(f"Error importing macOS modules: {e}")
+    print("Please install required dependencies:")
+    print("pip3 install -r requirements.txt")
+    sys.exit(1)
 
-os.makedirs(CONFIG_DIR, exist_ok=True)
+try:
+    from pynput import keyboard
+    from pynput.keyboard import Key, KeyCode
+except ImportError as e:
+    print(f"Error importing pynput: {e}")
+    print("Please install pynput:")
+    print("pip3 install pynput==1.7.6")
+    sys.exit(1)
 
-mouse_button = "left"
-click_mode = "toggle"
-hotkey = {"type": "keyboard", "keys": ["f6"], "button": None}
-click_interval = 0.1  
-duty_cycle = 50.0  
-hold_time = 0.0  
-limit_enabled = False
-click_limit = 100
-theme = "default"
-custom_colors = {"bg": "#2E2E2E", "fg": "#FFFFFF", "accent": "#007BFF"}
+VERSION = "2.0.0"
+SETTINGS_FILE = os.path.expanduser("~/.aeroutclicker.json")
+DISCORD_URL = "https://discord.com/shA7X2Wesr"
+GITHUB_REPO = "https://github.com/wrealaero/SpeedAutoClicker-Mac"
 
-clicking = False
-click_count = 0
-capturing_hotkey = False
-root = None
-start_btn = None
-stop_btn = None
-status_indicator = None
-overlay_label = None
-cps_var = None
-duty_var = None
-hold_var = None
-button_var = None
-mode_var = None
-limit_var = None
-limit_entry = None
-status_var = None
-click_counter_var = None
-hotkey_display_var = None
-theme_var = None
+DEFAULT_SETTINGS = {
+    "interval_ms": 50.0,
+    "duty_cycle": 50.0,
+    "hold_time": 0.0,
+    "mouse_button": "left",
+    "mode": "toggle",
+    "limit_enabled": False,
+    "click_limit": 100,
+    "theme": "default",
+    "custom_colors": {
+        "bg": "#f0f0f0",
+        "fg": "#000000",
+        "accent": "#0078d7"
+    },
+    "hotkey": {
+        "type": "keyboard",
+        "keys": ["shift", "q"]
+    },
+    "last_update_check": None
+}
 
 def load_settings():
-    """Load settings from file"""
-    global mouse_button, click_mode, hotkey, click_interval, duty_cycle, hold_time
-    global limit_enabled, click_limit, theme, custom_colors
-    
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, 'r') as f:
                 settings = json.load(f)
-                
-                mouse_button = settings.get('mouse_button', mouse_button)
-                click_mode = settings.get('click_mode', click_mode)
-                hotkey = settings.get('hotkey', hotkey)
-                click_interval = settings.get('click_interval', click_interval)
-                duty_cycle = settings.get('duty_cycle', duty_cycle)
-                hold_time = settings.get('hold_time', hold_time)
-                limit_enabled = settings.get('limit_enabled', limit_enabled)
-                click_limit = settings.get('click_limit', click_limit)
-                theme = settings.get('theme', theme)
-                custom_colors = settings.get('custom_colors', custom_colors)
-                
-                app_logger.info("Settings loaded successfully")
+                for key, value in DEFAULT_SETTINGS.items():
+                    if key not in settings:
+                        settings[key] = value
+                    elif key == "custom_colors" and isinstance(value, dict):
+                        for color_key, color_value in value.items():
+                            if color_key not in settings[key]:
+                                settings[key][color_key] = color_value
+                return settings
+        return DEFAULT_SETTINGS.copy()
     except Exception as e:
-        app_logger.error(f"Error loading settings: {e}", exc_info=True)
+        print(f"Error loading settings: {e}")
+        return DEFAULT_SETTINGS.copy()
 
-def save_settings():
-    """Save settings to file"""
+def save_settings(settings):
     try:
-        settings = {
-            'mouse_button': mouse_button,
-            'click_mode': click_mode,
-            'hotkey': hotkey,
-            'click_interval': click_interval,
-            'duty_cycle': duty_cycle,
-            'hold_time': hold_time,
-            'limit_enabled': limit_enabled,
-            'click_limit': click_limit,
-            'theme': theme,
-            'custom_colors': custom_colors
-        }
-        
+        os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
         with open(SETTINGS_FILE, 'w') as f:
-            json.dump(settings, f, indent=4)
-        
-        app_logger.info("Settings saved successfully")
+            json.dump(settings, f, indent=2)
     except Exception as e:
-        app_logger.error(f"Error saving settings: {e}", exc_info=True)
+        print(f"Error saving settings: {e}")
 
-def save_current_settings():
-    """Save current UI settings to variables and file"""
-    global mouse_button, click_mode, click_interval, duty_cycle, hold_time
-    global limit_enabled, click_limit, theme
-    
+def import_config(file_path):
     try:
-        mouse_button = button_var.get()
-        click_mode = mode_var.get()
-        
-        try:
-            cps = float(cps_var.get())
-            if cps > 0:
-                click_interval = 1.0 / cps
-        except ValueError:
-            pass
-        
-        try:
-            duty_cycle = float(duty_var.get())
-        except ValueError:
-            pass
-        
-        try:
-            hold_time = float(hold_var.get())
-        except ValueError:
-            pass
-        
-        limit_enabled = limit_var.get()
-        
-        try:
-            click_limit = int(limit_entry.get())
-        except ValueError:
-            pass
-        
-        theme = theme_var.get()
-
-        save_settings()
-        
-        messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
-        app_logger.info("Current settings saved by user")
-    
+        with open(file_path, 'r') as f:
+            imported_settings = json.load(f)
+            current_settings = load_settings()
+            
+            for key, value in imported_settings.items():
+                if key in current_settings:
+                    current_settings[key] = value
+            
+            save_settings(current_settings)
+        return True, "Configuration imported successfully!"
     except Exception as e:
-        app_logger.error(f"Error saving current settings: {e}", exc_info=True)
-        messagebox.showerror("Error", f"Failed to save settings: {e}")
+        return False, f"Error importing configuration: {e}"
 
-def export_config(name):
-    """Export current configuration to a file"""
-    if not name:
-        messagebox.showerror("Error", "Please enter a configuration name")
-        return
-    
+def export_config(file_path):
     try:
-        config = {
-            'mouse_button': button_var.get(),
-            'click_mode': mode_var.get(),
-            'cps': cps_var.get(),
-            'duty_cycle': duty_var.get(),
-            'hold_time': hold_var.get(),
-            'limit_enabled': limit_var.get(),
-            'click_limit': limit_entry.get(),
-            'export_date': datetime.now().isoformat()
+        settings = load_settings()
+        with open(file_path, 'w') as f:
+            json.dump(settings, f, indent=2)
+        return True, "Configuration exported successfully!"
+    except Exception as e:
+        return False, f"Error exporting configuration: {e}"
+
+class EnhancedHotkeyManager:
+    def __init__(self, callback, settings):
+        self.callback = callback
+        self.settings = settings
+        self.current_keys = set()
+        self.listener = None
+        self.capturing = False
+        self.capture_callback = None
+        self.start_listener()
+        
+    def start_listener(self):
+        try:
+            if self.listener and self.listener.is_alive():
+                self.listener.stop()
+                
+            self.listener = keyboard.Listener(
+                on_press=self.on_press,
+                on_release=self.on_release,
+                suppress=False
+            )
+            self.listener.daemon = True
+            self.listener.start()
+        except Exception as e:
+            print(f"Error starting keyboard listener: {e}")
+        
+    def stop_listener(self):
+        if self.listener:
+            try:
+                self.listener.stop()
+                self.listener = None
+            except Exception as e:
+                print(f"Error stopping keyboard listener: {e}")
+        
+    def restart_listener(self):
+        self.stop_listener()
+        time.sleep(0.5)
+        self.start_listener()
+        
+    def on_press(self, key):
+        try:
+            key_str = self._key_to_string(key)
+            
+            if key_str:
+                if self.capturing:
+                    self.current_keys.add(key_str)
+                    return True
+                    
+                hotkey = self.settings["hotkey"]
+                if hotkey["type"] == "keyboard":
+                    hotkey_keys = set(hotkey.get("keys", []))
+                    self.current_keys.add(key_str)
+                    
+                    if hotkey_keys and hotkey_keys.issubset(self.current_keys):
+                        if self.settings["mode"] == "hold" and len(self.current_keys) == len(hotkey_keys):
+                            self.callback(True)
+                        elif self.settings["mode"] == "toggle":
+                            self.callback(None)
+        except Exception as e:
+            print(f"Error in on_press: {e}")
+        return True
+        
+    def on_release(self, key):
+        try:
+            key_str = self._key_to_string(key)
+            
+            if key_str:
+                if self.capturing and key_str in self.current_keys:
+                    if self.current_keys:
+                        new_hotkey = {
+                            "type": "keyboard",
+                            "keys": list(self.current_keys)
+                        }
+                        self.settings["hotkey"] = new_hotkey
+                        save_settings(self.settings)
+                        
+                        if self.capture_callback:
+                            self.capture_callback(new_hotkey)
+                        
+                        self.capturing = False
+                    self.current_keys = set()
+                    return True
+                    
+                if key_str in self.current_keys:
+                    self.current_keys.remove(key_str)
+                    
+                if self.settings["mode"] == "hold":
+                    hotkey_keys = set(self.settings["hotkey"].get("keys", []))
+                    if key_str in hotkey_keys and not hotkey_keys.issubset(self.current_keys):
+                        self.callback(False)
+        except Exception as e:
+            print(f"Error in on_release: {e}")
+        return True
+        
+    def _key_to_string(self, key):
+        try:
+            if isinstance(key, Key):
+                if key == Key.shift or key == Key.shift_r or key == Key.shift_l:
+                    return "shift"
+                elif key == Key.ctrl or key == Key.ctrl_r or key == Key.ctrl_l:
+                    return "ctrl"
+                elif key == Key.alt or key == Key.alt_r or key == Key.alt_l:
+                    return "alt"
+                elif key == Key.cmd or key == Key.cmd_r or key == Key.cmd_l:
+                    return "cmd"
+                elif key == Key.space:
+                    return "space"
+                elif key == Key.tab:
+                    return "tab"
+                elif key == Key.enter:
+                    return "enter"
+                elif key == Key.esc:
+                    return "esc"
+                else:
+                    return key.name
+            elif isinstance(key, KeyCode):
+                if hasattr(key, 'char') and key.char:
+                    return key.char.lower()
+                elif hasattr(key, 'vk') and key.vk:
+                    if 48 <= key.vk <= 57:
+                        return chr(key.vk)
+                    elif 65 <= key.vk <= 90:
+                        return chr(key.vk + 32)
+            return None
+        except Exception as e:
+            print(f"Error converting key: {e}")
+            return None
+        
+    def start_capture(self, callback):
+        self.capturing = True
+        self.current_keys = set()
+        self.capture_callback = callback
+
+class AdvancedClickerEngine:
+    def __init__(self, settings, status_callback=None):
+        self.settings = settings
+        self.status_callback = status_callback
+        self.clicking = False
+        self.click_thread = None
+        self.stop_event = threading.Event()
+        self.click_count = 0
+        self.event_source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+        self.button_map = {
+            "left": {
+                "down": kCGEventLeftMouseDown,
+                "up": kCGEventLeftMouseUp,
+                "button": kCGMouseButtonLeft
+            },
+            "right": {
+                "down": kCGEventRightMouseDown,
+                "up": kCGEventRightMouseUp,
+                "button": kCGMouseButtonRight
+            },
+            "middle": {
+                "down": kCGEventOtherMouseDown,
+                "up": kCGEventOtherMouseUp,
+                "button": kCGMouseButtonCenter
+            }
         }
-
-        safe_name = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
-        if not safe_name:
-            safe_name = "config"
-
-        filename = os.path.join(CONFIG_DIR, f"{safe_name}.json")
-        with open(filename, 'w') as f:
-            json.dump(config, f, indent=4)
         
-        messagebox.showinfo("Configuration Exported", f"Configuration '{name}' has been exported successfully.")
-        app_logger.info(f"Configuration exported: {filename}")
-    
-    except Exception as e:
-        app_logger.error(f"Error exporting configuration: {e}", exc_info=True)
-        messagebox.showerror("Error", f"Failed to export configuration: {e}")
+    def get_mouse_position(self):
+        event = CGEventCreate(None)
+        return CGEventGetLocation(event)
+        
+    def perform_click(self, position, button_type="left"):
+        try:
+            button_info = self.button_map.get(button_type, self.button_map["left"])
 
-def import_config(name):
-    """Import configuration from a file"""
-    if not name:
-        messagebox.showerror("Error", "Please enter a configuration name")
-        return
-    
-    try:
-        safe_name = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
-        if not safe_name:
-            safe_name = "config"
+            mouse_down = CGEventCreateMouseEvent(
+                self.event_source,
+                button_info["down"],
+                position,
+                button_info["button"]
+            )
 
-        filename = os.path.join(CONFIG_DIR, f"{safe_name}.json")
-        if not os.path.exists(filename):
-            messagebox.showerror("Error", f"Configuration '{name}' not found")
+            mouse_up = CGEventCreateMouseEvent(
+                self.event_source,
+                button_info["up"],
+                position,
+                button_info["button"]
+            )
+
+            CGEventPost(kCGHIDEventTap, mouse_down)
+
+            hold_time = self.settings.get("hold_time", 0.0)
+            if hold_time > 0:
+                time.sleep(hold_time / 1000.0)
+            else:
+                interval_ms = self.settings["interval_ms"]
+                duty_cycle = self.settings["duty_cycle"]
+                on_time = (interval_ms * duty_cycle) / 100.0 / 1000.0
+                time.sleep(on_time)
+
+            CGEventPost(kCGHIDEventTap, mouse_up)
+            
+            return True
+        except Exception as e:
+            print(f"Error performing click: {e}")
+            return False
+        
+    def clicking_loop(self):
+        try:
+            self.click_count = 0
+            limit_enabled = self.settings["limit_enabled"]
+            click_limit = self.settings["click_limit"] if limit_enabled else 0
+            
+            if self.status_callback:
+                self.status_callback("Running")
+                
+            while not self.stop_event.is_set():
+                position = self.get_mouse_position()
+                success = self.perform_click(position, self.settings["mouse_button"])
+                
+                if success:
+                    self.click_count += 1
+                    if limit_enabled and self.click_count >= click_limit:
+                        break
+
+                interval_ms = self.settings["interval_ms"]
+                hold_time = self.settings.get("hold_time", 0.0)
+                
+                if hold_time > 0:
+                    wait_time = interval_ms / 1000.0
+                else:
+                    duty_cycle = self.settings["duty_cycle"]
+                    on_time = (interval_ms * duty_cycle) / 100.0 / 1000.0
+                    wait_time = (interval_ms / 1000.0) - on_time
+                    
+                if wait_time > 0 and not self.stop_event.is_set():
+                    time.sleep(wait_time)
+            
+            if self.status_callback:
+                if limit_enabled and self.click_count >= click_limit:
+                    self.status_callback(f"Completed {self.click_count} clicks")
+                else:
+                    self.status_callback("Stopped")
+                    
+            self.clicking = False
+        except Exception as e:
+            print(f"Error in clicking loop: {e}")
+            if self.status_callback:
+                self.status_callback(f"Error: {str(e)}")
+            self.clicking = False
+        
+    def start_clicking(self):
+        if not self.clicking:
+            self.clicking = True
+            self.stop_event.clear()
+            self.click_thread = threading.Thread(target=self.clicking_loop)
+            self.click_thread.daemon = True
+            self.click_thread.start()
+            return True
+        return False
+        
+    def stop_clicking(self):
+        if self.clicking:
+            self.stop_event.set()
+            if self.click_thread and self.click_thread.is_alive():
+                try:
+                    self.click_thread.join(timeout=1.0)
+                except Exception as e:
+                    print(f"Error joining click thread: {e}")
+            self.clicking = False
+            return True
+        return False
+        
+    def toggle_clicking(self):
+        if self.clicking:
+            return self.stop_clicking()
+        else:
+            return self.start_clicking()
+        
+    def handle_hotkey(self, state=None):
+        if state is None:
+            return self.toggle_clicking()
+        elif state:
+            return self.start_clicking()
+        else:
+            return self.stop_clicking()
+
+class FloatEntry(ttk.Entry):
+    def __init__(self, master=None, decimal_places=2, min_value=0.0, max_value=float('inf'), **kwargs):
+        self.decimal_places = decimal_places
+        self.min_value = min_value
+        self.max_value = max_value
+        self.var = kwargs.pop('textvariable', tk.StringVar())
+        super().__init__(master, textvariable=self.var, **kwargs)
+        
+        self.var.trace_add('write', self._validate)
+        self.bind('<FocusOut>', self._on_focus_out)
+        self.bind('<Return>', self._on_focus_out)
+        
+    def _validate(self, *args):
+        current = self.var.get()
+
+        if current == '' or current == '.':
             return
-        
-        with open(filename, 'r') as f:
-            config = json.load(f)
 
-        button_var.set(config.get('mouse_button', 'left'))
-        mode_var.set(config.get('click_mode', 'toggle'))
-        cps_var.set(config.get('cps', '10.0'))
-        duty_var.set(config.get('duty_cycle', '50.0'))
-        hold_var.set(config.get('hold_time', '0.0'))
-        limit_var.set(config.get('limit_enabled', False))
-        limit_entry.delete(0, tk.END)
-        limit_entry.insert(0, str(config.get('click_limit', 100)))
-        toggle_limit_entry()
-        
-        messagebox.showinfo("Configuration Imported", f"Configuration '{name}' has been imported successfully.")
-        app_logger.info(f"Configuration imported: {filename}")
+        filtered = re.sub(r'[^\d.]', '', current)
+
+        parts = filtered.split('.')
+        if len(parts) > 2:
+            filtered = parts[0] + '.' + ''.join(parts[1:])
+            
+        try:
+            value = float(filtered)
+
+            if value < self.min_value:
+                value = self.min_value
+            elif value > self.max_value:
+                value = self.max_value
+
+            if filtered != current:
+                self.var.set(filtered)
+        except ValueError:
+            if hasattr(self, 'last_valid'):
+                self.var.set(self.last_valid)
+            else:
+                self.var.set('')
     
-    except Exception as e:
-        app_logger.error(f"Error importing configuration: {e}", exc_info=True)
-        messagebox.showerror("Error", f"Failed to import configuration: {e}")
+    def _on_focus_out(self, *args):
+        current = self.var.get()
 
-def validate_numeric_input(P):
-    """Validate that input is numeric"""
-    if P == "" or P == ".":
+        if current == '' or current == '.':
+            value = self.min_value
+        else:
+            try:
+                value = float(current)
+                if value < self.min_value:
+                    value = self.min_value
+                elif value > self.max_value:
+                    value = self.max_value
+            except ValueError:
+                value = self.min_value
+
+        formatted = f"{value:.{self.decimal_places}f}"
+        self.var.set(formatted)
+        self.last_valid = formatted
+        
         return True
-    try:
-        float(P)
-        return True
-    except ValueError:
-        return False
-
-def toggle_limit_entry():
-    """Enable or disable the limit entry based on checkbox"""
-    if limit_var.get():
-        limit_entry.config(state="normal")
-    else:
-        limit_entry.config(state="disabled")
-
-def update_click_interval(*args):
-    """Update click interval from CPS"""
-    global click_interval
-    try:
-        cps = float(cps_var.get())
-        if cps > 0:
-            click_interval = 1.0 / cps
-    except ValueError:
-        pass
-
-def update_duty_cycle(*args):
-    """Update duty cycle"""
-    global duty_cycle
-    try:
-        duty_cycle = float(duty_var.get())
-    except ValueError:
-        pass
-
-def update_hold_time(*args):
-    """Update hold time"""
-    global hold_time
-    try:
-        hold_time = float(hold_var.get())
-    except ValueError:
-        pass
-
-def choose_custom_color():
-    """Open color chooser dialog for custom theme"""
-    try:
-        bg_color = colorchooser.askcolor(
-            title="Choose Background Color",
-            initialcolor=custom_colors["bg"]
-        )
-        if bg_color[1]:
-            custom_colors["bg"] = bg_color[1]
-
-        fg_color = colorchooser.askcolor(
-            title="Choose Text Color",
-            initialcolor=custom_colors["fg"]
-        )
-        if fg_color[1]:
-            custom_colors["fg"] = fg_color[1]
-
-        accent_color = colorchooser.askcolor(
-            title="Choose Accent Color",
-            initialcolor=custom_colors["accent"]
-        )
-        if accent_color[1]:
-            custom_colors["accent"] = accent_color[1]
-
-        if theme_var.get() == "custom":
-            apply_theme()
         
-        app_logger.info("Custom colors updated")
-    except Exception as e:
-        app_logger.error(f"Error choosing custom colors: {e}", exc_info=True)
+    def get_float(self):
+        try:
+            return float(self.var.get())
+        except ValueError:
+            return self.min_value
 
-def apply_theme():
-    """Apply the selected theme to the UI"""
-    global theme
+class IntEntry(ttk.Entry):
+    def __init__(self, master=None, min_value=0, max_value=sys.maxsize, **kwargs):
+        self.min_value = min_value
+        self.max_value = max_value
+        self.var = kwargs.pop('textvariable', tk.StringVar())
+        super().__init__(master, textvariable=self.var, **kwargs)
+        
+        self.var.trace_add('write', self._validate)
+        self.bind('<FocusOut>', self._on_focus_out)
+        self.bind('<Return>', self._on_focus_out)
+        
+    def _validate(self, *args):
+        current = self.var.get()
+
+        if current == '':
+            return
+
+        filtered = re.sub(r'[^\d]', '', current)
+        
+        try:
+            value = int(filtered)
+
+            if filtered != current:
+                self.var.set(filtered)
+        except ValueError:
+            if hasattr(self, 'last_valid'):
+                self.var.set(self.last_valid)
+            else:
+                self.var.set('')
     
-    theme = theme_var.get()
-    
-    try:
+    def _on_focus_out(self, *args):
+        current = self.var.get()
+
+        if current == '':
+            value = self.min_value
+        else:
+            try:
+                value = int(current)
+                if value < self.min_value:
+                    value = self.min_value
+                elif value > self.max_value:
+                    value = self.max_value
+            except ValueError:
+                value = self.min_value
+        
+        formatted = str(value)
+        self.var.set(formatted)
+        self.last_valid = formatted
+        
+        return True
+        
+    def get_int(self):
+        try:
+            return int(self.var.get())
+        except ValueError:
+            return self.min_value
+
+class AeroutSpeedAutoClickerGUI:
+    def __init__(self):
+        self.settings = load_settings()
+        self.clicker_engine = AdvancedClickerEngine(self.settings, self.update_status)
+        self.hotkey_manager = EnhancedHotkeyManager(self.clicker_engine.handle_hotkey, self.settings)
+        
+        self.root = tk.Tk()
+        self.root.title(f"Aerout SpeedAutoClicker v{VERSION}")
+        self.root.geometry("500x650")
+        self.root.resizable(False, False)
+        
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+            if os.path.exists(icon_path):
+                icon = tk.PhotoImage(file=icon_path)
+                self.root.iconphoto(True, icon)
+        except Exception as e:
+            print(f"Error loading icon: {e}")
+        
+        self.style = ttk.Style()
+        self.apply_theme()
+        
+        self.main_frame = ttk.Frame(self.root, padding=10)
+        self.main_frame.pack(fill="both", expand=True)
+        
+        title_frame = ttk.Frame(self.main_frame)
+        title_frame.pack(fill="x", pady=(0, 10))
+        
+        title_label = ttk.Label(
+            title_frame, 
+            text="Aerout SpeedAutoClicker",
+            style="Title.TLabel"
+        )
+        title_label.pack(anchor="center")
+        
+        version_label = ttk.Label(
+            title_frame, 
+            text=f"v{VERSION}",
+            font=("Arial", 9)
+        )
+        version_label.pack(anchor="center")
+        
+        self.notebook = ttk.Notebook(self.main_frame)
+        self.notebook.pack(fill="both", expand=True, pady=10)
+        
+        self.main_tab = ttk.Frame(self.notebook, padding=10)
+        self.advanced_tab = ttk.Frame(self.notebook, padding=10)
+        self.settings_tab = ttk.Frame(self.notebook, padding=10)
+        self.about_tab = ttk.Frame(self.notebook, padding=10)
+        
+        self.notebook.add(self.main_tab, text="Main")
+        self.notebook.add(self.advanced_tab, text="Advanced")
+        self.notebook.add(self.settings_tab, text="Settings")
+        self.notebook.add(self.about_tab, text="About")
+        
+        self.build_main_tab()
+        self.build_advanced_tab()
+        self.build_settings_tab()
+        self.build_about_tab()
+        
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.after(1000, self.check_for_updates_silently)
+
+        self.root.after(500, self.update_click_count_display)
+        
+    def apply_theme(self):
+        theme = self.settings.get("theme", "default")
+        
         if theme == "dark":
-            style = ttk.Style()
-            style.theme_use("clam")
-            style.configure(".", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF",
-                            fieldbackground="#3E3E3E",
-                            troughcolor="#3E3E3E",
-                            darkcolor="#2E2E2E",
-                            lightcolor="#4E4E4E")
-            style.configure("TButton", 
-                            background="#007BFF",
-                            foreground="#FFFFFF")
-            style.map("TButton",
-                     background=[("active", "#0069D9"), ("disabled", "#5C636A")],
-                     foreground=[("disabled", "#C0C0C0")])
-            style.configure("TCheckbutton", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF")
-            style.configure("TRadiobutton", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF")
-            style.configure("TLabel", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF")
-            style.configure("TFrame", 
-                            background="#2E2E2E")
-            style.configure("TLabelframe", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF")
-            style.configure("TLabelframe.Label", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF")
-            style.configure("TNotebook", 
-                            background="#2E2E2E",
-                            foreground="#FFFFFF",
-                            tabmargins=[2, 5, 2, 0])
-            style.configure("TNotebook.Tab", 
-                            background="#3E3E3E",
-                            foreground="#FFFFFF",
-                            padding=[10, 2])
-            style.map("TNotebook.Tab",
-                     background=[("selected", "#007BFF"), ("active", "#4E4E4E")],
-                     foreground=[("selected", "#FFFFFF"), ("active", "#FFFFFF")])
-            
-            root.configure(bg="#2E2E2E")
-
-            for widget in root.winfo_children():
-                if isinstance(widget, tk.Text):
-                    widget.configure(bg="#3E3E3E", fg="#FFFFFF", insertbackground="#FFFFFF")
-        
+            self.root.configure(bg="#2d2d2d")
+            self.style.configure("TFrame", background="#2d2d2d")
+            self.style.configure("TLabel", background="#2d2d2d", foreground="#ffffff")
+            self.style.configure("TButton", background="#3d3d3d", foreground="#ffffff")
+            self.style.configure("TCheckbutton", background="#2d2d2d", foreground="#ffffff")
+            self.style.configure("TRadiobutton", background="#2d2d2d", foreground="#ffffff")
+            self.style.configure("TNotebook", background="#2d2d2d", foreground="#ffffff")
+            self.style.configure("TNotebook.Tab", background="#3d3d3d", foreground="#ffffff")
+            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background="#2d2d2d", foreground="#ffffff")
+            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background="#2d2d2d", foreground="#ffffff")
         elif theme == "light":
-            style = ttk.Style()
-            style.theme_use("clam")
-            style.configure(".", 
-                            background="#F8F9FA",
-                            foreground="#212529",
-                            fieldbackground="#FFFFFF",
-                            troughcolor="#E9ECEF",
-                            darkcolor="#CED4DA",
-                            lightcolor="#F8F9FA")
-            style.configure("TButton", 
-                            background="#007BFF",
-                            foreground="#FFFFFF")
-            style.map("TButton",
-                     background=[("active", "#0069D9"), ("disabled", "#6C757D")],
-                     foreground=[("disabled", "#DEE2E6")])
-            style.configure("TCheckbutton", 
-                            background="#F8F9FA",
-                            foreground="#212529")
-            style.configure("TRadiobutton", 
-                            background="#F8F9FA",
-                            foreground="#212529")
-            style.configure("TLabel", 
-                            background="#F8F9FA",
-                            foreground="#212529")
-            style.configure("TFrame", 
-                            background="#F8F9FA")
-            style.configure("TLabelframe", 
-                            background="#F8F9FA",
-                            foreground="#212529")
-            style.configure("TLabelframe.Label", 
-                            background="#F8F9FA",
-                            foreground="#212529")
-            style.configure("TNotebook", 
-                            background="#F8F9FA",
-                            foreground="#212529",
-                            tabmargins=[2, 5, 2, 0])
-            style.configure("TNotebook.Tab", 
-                            background="#E9ECEF",
-                            foreground="#212529",
-                            padding=[10, 2])
-            style.map("TNotebook.Tab",
-                     background=[("selected", "#007BFF"), ("active", "#CED4DA")],
-                     foreground=[("selected", "#FFFFFF"), ("active", "#212529")])
-            
-            root.configure(bg="#F8F9FA")
-
-            for widget in root.winfo_children():
-                if isinstance(widget, tk.Text):
-                    widget.configure(bg="#FFFFFF", fg="#212529", insertbackground="#212529")
-        
+            self.root.configure(bg="#f0f0f0")
+            self.style.configure("TFrame", background="#f0f0f0")
+            self.style.configure("TLabel", background="#f0f0f0", foreground="#000000")
+            self.style.configure("TButton", background="#e0e0e0", foreground="#000000")
+            self.style.configure("TCheckbutton", background="#f0f0f0", foreground="#000000")
+            self.style.configure("TRadiobutton", background="#f0f0f0", foreground="#000000")
+            self.style.configure("TNotebook", background="#f0f0f0", foreground="#000000")
+            self.style.configure("TNotebook.Tab", background="#e0e0e0", foreground="#000000")
+            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background="#f0f0f0", foreground="#000000")
+            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background="#f0f0f0", foreground="#000000")
         elif theme == "custom":
-            style = ttk.Style()
-            style.theme_use("clam")
-            style.configure(".", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"],
-                            fieldbackground=custom_colors["bg"],
-                            troughcolor=custom_colors["bg"])
-            style.configure("TButton", 
-                            background=custom_colors["accent"],
-                            foreground=custom_colors["fg"])
-            style.map("TButton",
-                     background=[("active", custom_colors["accent"]), ("disabled", "#5C636A")],
-                     foreground=[("disabled", "#C0C0C0")])
-            style.configure("TCheckbutton", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"])
-            style.configure("TRadiobutton", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"])
-            style.configure("TLabel", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"])
-            style.configure("TFrame", 
-                            background=custom_colors["bg"])
-            style.configure("TLabelframe", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"])
-            style.configure("TLabelframe.Label", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"])
-            style.configure("TNotebook", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"],
-                            tabmargins=[2, 5, 2, 0])
-            style.configure("TNotebook.Tab", 
-                            background=custom_colors["bg"],
-                            foreground=custom_colors["fg"],
-                            padding=[10, 2])
-            style.map("TNotebook.Tab",
-                     background=[("selected", custom_colors["accent"]), ("active", custom_colors["bg"])],
-                     foreground=[("selected", custom_colors["fg"]), ("active", custom_colors["fg"])])
+            colors = self.settings.get("custom_colors", {})
+            bg_color = colors.get("bg", "#f0f0f0")
+            fg_color = colors.get("fg", "#000000")
+            accent_color = colors.get("accent", "#0078d7")
             
-            root.configure(bg=custom_colors["bg"])
-            
-            # Configure any Text widgets
-            for widget in root.winfo_children():
-                if isinstance(widget, tk.Text):
-                    widget.configure(bg=custom_colors["bg"], fg=custom_colors["fg"], insertbackground=custom_colors["fg"])
-        
+            self.root.configure(bg=bg_color)
+            self.style.configure("TFrame", background=bg_color)
+            self.style.configure("TLabel", background=bg_color, foreground=fg_color)
+            self.style.configure("TButton", background=accent_color, foreground=fg_color)
+            self.style.configure("TCheckbutton", background=bg_color, foreground=fg_color)
+            self.style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
+            self.style.configure("TNotebook", background=bg_color, foreground=fg_color)
+            self.style.configure("TNotebook.Tab", background=accent_color, foreground=fg_color)
+            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background=bg_color, foreground=fg_color)
+            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background=bg_color, foreground=fg_color)
         else:
-            style = ttk.Style()
-            style.theme_use("default")
+            self.style.configure("TFrame", padding=5)
+            self.style.configure("TLabel", padding=2)
+            self.style.configure("TButton", padding=5)
+            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"))
+            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"))
 
-            root.configure(bg=style.lookup("TFrame", "background"))
-
-            for widget in root.winfo_children():
-                if isinstance(widget, tk.Text):
-                    widget.configure(bg="white", fg="black", insertbackground="black")
+    def build_main_tab(self):
+        self.create_section_label(self.main_tab, "Click Interval")
         
-        app_logger.info(f"Applied theme: {theme}")
-    
-    except Exception as e:
-        app_logger.error(f"Error applying theme: {e}", exc_info=True)
+        interval_frame = ttk.Frame(self.main_tab)
+        interval_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(interval_frame, text="Interval:").pack(side="left")
+        
+        self.interval_var = tk.StringVar(value=f"{self.settings['interval_ms']:.2f}")
+        self.interval_entry = FloatEntry(
+            interval_frame, 
+            textvariable=self.interval_var, 
+            width=10,
+            decimal_places=2,
+            min_value=1.0,
+            max_value=10000.0
+        )
+        self.interval_entry.pack(side="left", padx=(5, 5))
+        
+        ttk.Label(interval_frame, text="ms").pack(side="left")
+        
+        self.cps_label = ttk.Label(interval_frame, text=f"= {1000.0/float(self.settings['interval_ms']):.2f} CPS")
+        self.cps_label.pack(side="left", padx=(10, 0))
+        
+        self.create_section_label(self.main_tab, "Mouse Button")
+        
+        button_frame = ttk.Frame(self.main_tab)
+        button_frame.pack(fill="x", pady=5)
+        
+        self.mouse_button_var = tk.StringVar(value=self.settings["mouse_button"])
+        mouse_buttons = ["left", "right", "middle"]
+        
+        for button in mouse_buttons:
+            rb = ttk.Radiobutton(
+                button_frame, 
+                text=button.capitalize(),
+                variable=self.mouse_button_var,
+                value=button,
+                command=self.update_mouse_button
+            )
+            rb.pack(side="left", padx=(0, 10))
+            
+        self.create_section_label(self.main_tab, "Hotkey Setup")
+        
+        hotkey_frame = ttk.Frame(self.main_tab)
+        hotkey_frame.pack(fill="x", pady=5)
+        
+        self.hotkey_display = ttk.Label(
+            hotkey_frame, 
+            text=self.format_hotkey_display(),
+            font=("Arial", 10, "bold")
+        )
+        self.hotkey_display.pack(side="left", padx=(0, 10))
+        
+        self.hotkey_button = ttk.Button(
+            hotkey_frame, 
+            text="Set Hotkey",
+            command=self.start_hotkey_capture
+        )
+        self.hotkey_button.pack(side="right")
+        
+        self.create_section_label(self.main_tab, "Hotkey Activation Mode")
+        
+        mode_frame = ttk.Frame(self.main_tab)
+        mode_frame.pack(fill="x", pady=5)
+        
+        self.mode_var = tk.StringVar(value=self.settings["mode"])
+        
+        toggle_rb = ttk.Radiobutton(
+            mode_frame, 
+            text="Toggle Mode (Press once to start, again to stop)",
+            variable=self.mode_var,
+            value="toggle",
+            command=self.update_mode
+        )
+        toggle_rb.pack(anchor="w", pady=(0, 5))
+        
+        hold_rb = ttk.Radiobutton(
+            mode_frame, 
+            text="Hold Mode (Click only while hotkey is held)",
+            variable=self.mode_var,
+            value="hold",
+            command=self.update_mode
+        )
+        hold_rb.pack(anchor="w")
+        
+        control_frame = ttk.Frame(self.main_tab)
+        control_frame.pack(fill="x", pady=15)
+        
+        self.toggle_button = ttk.Button(
+            control_frame, 
+            text="Start",
+            command=self.toggle_clicking,
+            style="TButton",
+            width=20
+        )
+        self.toggle_button.pack(side="left", padx=(0, 10))
+        
+        self.status_label = ttk.Label(
+            control_frame, 
+            text="Ready",
+            font=("Arial", 10, "bold")
+        )
+        self.status_label.pack(side="left")
 
-def check_for_updates(show_message=True):
-    """Check for updates from GitHub"""
-    try:
-        import requests
-        from packaging import version
+        self.click_count_label = ttk.Label(
+            control_frame, 
+            text="Clicks: 0",
+            font=("Arial", 10)
+        )
+        self.click_count_label.pack(side="right")
 
-        response = requests.get(
-            "https://api.github.com/repos/wrealaero/SpeedAutoClicker-Mac/releases/latest",
-            headers={"User-Agent": f"AeroutClicker/{VERSION}"},
-            timeout=5
+        self.interval_var.trace_add('write', self.update_cps_display)
+        
+    def build_advanced_tab(self):
+        self.create_section_label(self.advanced_tab, "Click Timing")
+
+        duty_frame = ttk.Frame(self.advanced_tab)
+        duty_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(duty_frame, text="Click Duty:").pack(side="left")
+        
+        self.duty_var = tk.StringVar(value=f"{self.settings['duty_cycle']:.2f}")
+        self.duty_entry = FloatEntry(
+            duty_frame, 
+            textvariable=self.duty_var, 
+            width=10,
+            decimal_places=2,
+            min_value=1.0,
+            max_value=99.0
+        )
+        self.duty_entry.pack(side="left", padx=(5, 5))
+        
+        ttk.Label(duty_frame, text="%").pack(side="left")
+        
+        ttk.Label(duty_frame, text="(% of interval mouse button is held down)").pack(side="left", padx=(10, 0))
+
+        hold_frame = ttk.Frame(self.advanced_tab)
+        hold_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(hold_frame, text="Hold Time:").pack(side="left")
+        
+        self.hold_var = tk.StringVar(value=f"{self.settings.get('hold_time', 0.0):.2f}")
+        self.hold_entry = FloatEntry(
+            hold_frame, 
+            textvariable=self.hold_var, 
+            width=10,
+            decimal_places=2,
+            min_value=0.0,
+            max_value=10000.0
+        )
+        self.hold_entry.pack(side="left", padx=(5, 5))
+        
+        ttk.Label(hold_frame, text="ms").pack(side="left")
+        
+        ttk.Label(hold_frame, text="(0 = use duty cycle instead)").pack(side="left", padx=(10, 0))
+
+        self.create_section_label(self.advanced_tab, "Click Limit")
+        
+        limit_frame = ttk.Frame(self.advanced_tab)
+        limit_frame.pack(fill="x", pady=5)
+        
+        self.limit_var = tk.BooleanVar(value=self.settings["limit_enabled"])
+        limit_check = ttk.Checkbutton(
+            limit_frame, 
+            text="Stop after",
+            variable=self.limit_var,
+            command=self.update_limit_enabled
+        )
+        limit_check.pack(side="left")
+        
+        self.limit_count_var = tk.StringVar(value=str(self.settings["click_limit"]))
+        self.limit_entry = IntEntry(
+            limit_frame, 
+            textvariable=self.limit_count_var, 
+            width=10,
+            min_value=1,
+            max_value=1000000
+        )
+        self.limit_entry.pack(side="left", padx=(5, 5))
+        
+        ttk.Label(limit_frame, text="clicks").pack(side="left")
+
+        self.duty_var.trace_add('write', self.update_duty_cycle)
+        self.hold_var.trace_add('write', self.update_hold_time)
+        self.limit_count_var.trace_add('write', self.update_click_limit)
+        
+    def build_settings_tab(self):
+        self.create_section_label(self.settings_tab, "Theme Settings")
+        
+        theme_frame = ttk.Frame(self.settings_tab)
+        theme_frame.pack(fill="x", pady=5)
+        
+        self.theme_var = tk.StringVar(value=self.settings["theme"])
+        
+        themes = [
+            ("Default", "default"),
+            ("Light", "light"),
+            ("Dark", "dark"),
+            ("Custom", "custom")
+        ]
+        
+        for i, (text, value) in enumerate(themes):
+            rb = ttk.Radiobutton(
+                theme_frame, 
+                text=text,
+                variable=self.theme_var,
+                value=value,
+                command=self.update_theme
+            )
+            rb.grid(row=0, column=i, padx=(0, 10))
+
+        custom_frame = ttk.Frame(self.settings_tab)
+        custom_frame.pack(fill="x", pady=5)
+        
+        custom_colors = self.settings.get("custom_colors", {})
+        
+        color_options = [
+            ("Background", "bg", custom_colors.get("bg", "#f0f0f0")),
+            ("Text", "fg", custom_colors.get("fg", "#000000")),
+            ("Accent", "accent", custom_colors.get("accent", "#0078d7"))
+        ]
+        
+        for i, (text, key, default) in enumerate(color_options):
+            ttk.Label(custom_frame, text=f"{text}:").grid(row=i, column=0, sticky="w", pady=2)
+            
+            color_frame = ttk.Frame(custom_frame)
+            color_frame.grid(row=i, column=1, sticky="w", padx=(5, 10), pady=2)
+            
+            color_preview = tk.Frame(color_frame, bg=default, width=20, height=20)
+            color_preview.pack(side="left")
+            
+            color_button = ttk.Button(
+                color_frame, 
+                text="Choose",
+                command=lambda k=key, p=color_preview: self.choose_color(k, p)
+            )
+            color_button.pack(side="left", padx=(5, 0))
+
+        self.create_section_label(self.settings_tab, "Configuration")
+        
+        config_frame = ttk.Frame(self.settings_tab)
+        config_frame.pack(fill="x", pady=5)
+        
+        import_button = ttk.Button(
+            config_frame, 
+            text="Import Settings",
+            command=self.import_settings
+        )
+        import_button.pack(side="left", padx=(0, 10))
+        
+        export_button = ttk.Button(
+            config_frame, 
+            text="Export Settings",
+            command=self.export_settings
+        )
+        export_button.pack(side="left")
+
+        reset_frame = ttk.Frame(self.settings_tab)
+        reset_frame.pack(fill="x", pady=10)
+        
+        reset_button = ttk.Button(
+            reset_frame, 
+            text="Reset to Default Settings",
+            command=self.reset_settings
+        )
+        reset_button.pack(side="left")
+        
+    def build_about_tab(self):
+        about_frame = ttk.Frame(self.about_tab)
+        about_frame.pack(fill="both", expand=True)
+        
+        ttk.Label(
+            about_frame, 
+            text="Aerout SpeedAutoClicker",
+            font=("Arial", 14, "bold")
+        ).pack(pady=(0, 5))
+        
+        ttk.Label(
+            about_frame, 
+            text=f"Version {VERSION}",
+            font=("Arial", 10)
+        ).pack(pady=(0, 10))
+        
+        ttk.Label(
+            about_frame, 
+            text="A good auto-clicker for macOS",
+            font=("Arial", 10)
+        ).pack(pady=(0, 5))
+        
+        ttk.Label(
+            about_frame, 
+            text="Compatible with Intel and Apple Silicon Macs",
+            font=("Arial", 10)
+        ).pack(pady=(0, 20))
+        
+        ttk.Label(
+            about_frame, 
+            text="© 2024 Aerout - Realaero <3",
+            font=("Arial", 9)
+        ).pack(pady=(0, 5))
+        
+        links_frame = ttk.Frame(about_frame)
+        links_frame.pack(pady=10)
+        
+        discord_button = ttk.Button(
+            links_frame, 
+            text="Join Discord",
+            command=lambda: webbrowser.open(DISCORD_URL)
+        )
+        discord_button.pack(side="left", padx=(0, 10))
+        
+        github_button = ttk.Button(
+            links_frame, 
+            text="GitHub Repository",
+            command=lambda: webbrowser.open(GITHUB_REPO)
+        )
+        github_button.pack(side="left")
+        
+        update_frame = ttk.Frame(about_frame)
+        update_frame.pack(pady=10)
+        
+        self.update_status_label = ttk.Label(
+            update_frame, 
+            text="",
+            font=("Arial", 9)
+        )
+        self.update_status_label.pack(side="left", padx=(0, 10))
+        
+        check_update_button = ttk.Button(
+            update_frame, 
+            text="Check for Updates",
+            command=self.check_for_updates
+        )
+        check_update_button.pack(side="left")
+        
+    def create_section_label(self, parent, text):
+        label = ttk.Label(
+            parent, 
+            text=text,
+            style="Header.TLabel"
+        )
+        label.pack(anchor="w", pady=(10, 5))
+        
+    def update_cps_display(self, *args):
+        try:
+            interval = float(self.interval_var.get())
+            if interval <= 0:
+                interval = 1.0
+            cps = 1000.0 / interval
+            self.cps_label.config(text=f"= {cps:.2f} CPS")
+        except ValueError:
+            self.cps_label.config(text="= ? CPS")
+            
+    def update_mouse_button(self):
+        self.settings["mouse_button"] = self.mouse_button_var.get()
+        save_settings(self.settings)
+        
+    def update_mode(self):
+        self.settings["mode"] = self.mode_var.get()
+        save_settings(self.settings)
+        
+    def update_duty_cycle(self, *args):
+        try:
+            duty = float(self.duty_var.get())
+            if 1.0 <= duty <= 99.0:
+                self.settings["duty_cycle"] = duty
+                save_settings(self.settings)
+        except ValueError:
+            pass
+            
+    def update_hold_time(self, *args):
+        try:
+            hold_time = float(self.hold_var.get())
+            if hold_time >= 0:
+                self.settings["hold_time"] = hold_time
+                save_settings(self.settings)
+        except ValueError:
+            pass
+            
+    def update_limit_enabled(self):
+        self.settings["limit_enabled"] = self.limit_var.get()
+        save_settings(self.settings)
+        
+    def update_click_limit(self, *args):
+        try:
+            limit = int(self.limit_count_var.get())
+            if limit > 0:
+                self.settings["click_limit"] = limit
+                save_settings(self.settings)
+        except ValueError:
+            pass
+            
+    def update_theme(self):
+        theme = self.theme_var.get()
+        self.settings["theme"] = theme
+        save_settings(self.settings)
+        self.apply_theme()
+        
+    def choose_color(self, key, preview_widget):
+        current_color = self.settings.get("custom_colors", {}).get(key, "#f0f0f0")
+        color = colorchooser.askcolor(initialcolor=current_color)
+        
+        if color and color[1]:
+            if "custom_colors" not in self.settings:
+                self.settings["custom_colors"] = {}
+            self.settings["custom_colors"][key] = color[1]
+            preview_widget.config(bg=color[1])
+            save_settings(self.settings)
+            
+            if self.settings["theme"] == "custom":
+                self.apply_theme()
+                
+    def format_hotkey_display(self):
+        hotkey = self.settings.get("hotkey", {"type": "keyboard", "keys": ["shift", "q"]})
+        if hotkey["type"] == "keyboard":
+            keys = hotkey.get("keys", [])
+            if keys:
+                return "Current Hotkey: " + " + ".join(key.upper() for key in keys)
+        return "No hotkey set"
+        
+    def start_hotkey_capture(self):
+        self.hotkey_button.config(text="Press Keys...")
+        self.hotkey_display.config(text="Press the keys you want to use...")
+        self.hotkey_manager.start_capture(self.finish_hotkey_capture)
+        
+    def finish_hotkey_capture(self, new_hotkey):
+        self.hotkey_button.config(text="Set Hotkey")
+        self.hotkey_display.config(text=self.format_hotkey_display())
+        
+    def toggle_clicking(self):
+        if self.clicker_engine.clicking:
+            self.clicker_engine.stop_clicking()
+            self.toggle_button.config(text="Start")
+            self.update_status("Stopped")
+        else:
+            self.settings["interval_ms"] = self.interval_entry.get_float()
+            self.settings["duty_cycle"] = self.duty_entry.get_float()
+            self.settings["hold_time"] = self.hold_entry.get_float()
+            self.settings["click_limit"] = self.limit_entry.get_int()
+            save_settings(self.settings)
+            
+            self.clicker_engine.start_clicking()
+            self.toggle_button.config(text="Stop")
+            self.update_status("Running")
+            
+    def update_status(self, status_text):
+        self.status_label.config(text=status_text)
+        
+    def update_click_count_display(self):
+        if hasattr(self.clicker_engine, 'click_count'):
+            self.click_count_label.config(text=f"Clicks: {self.clicker_engine.click_count}")
+        self.root.after(500, self.update_click_count_display)
+        
+    def import_settings(self):
+        file_path = filedialog.askopenfilename(
+            title="Import Settings",
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
         )
         
-        if response.status_code == 200:
-            release_info = response.json()
-            latest_version = release_info["tag_name"].lstrip("v")
+        if file_path:
+            success, message = import_config(file_path)
+            messagebox.showinfo("Import Settings", message)
+            
+            if success:
+                self.settings = load_settings()
+                self.reload_settings_to_ui()
+                self.apply_theme()
+                
+    def export_settings(self):
+        file_path = filedialog.asksaveasfilename(
+            title="Export Settings",
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+        )
+        
+        if file_path:
+            success, message = export_config(file_path)
+            messagebox.showinfo("Export Settings", message)
+            
+    def reset_settings(self):
+        confirm = messagebox.askyesno(
+            "Reset Settings",
+            "Are you sure you want to reset all settings to default values?"
+        )
+        
+        if confirm:
+            self.settings = DEFAULT_SETTINGS.copy()
+            save_settings(self.settings)
+            self.reload_settings_to_ui()
+            self.apply_theme()
+            messagebox.showinfo("Reset Settings", "Settings have been reset to default values.")
+            
+    def reload_settings_to_ui(self):
+        self.interval_var.set(f"{self.settings['interval_ms']:.2f}")
+        self.mouse_button_var.set(self.settings["mouse_button"])
+        self.mode_var.set(self.settings["mode"])
+        self.hotkey_display.config(text=self.format_hotkey_display())
 
-            if version.parse(latest_version) > version.parse(VERSION):
-                message = f"A new version ({latest_version}) is available!\n\nWould you like to update now?"
-                if messagebox.askyesno("Update Available", message):
-                    subprocess.Popen([sys.executable, "updater.py"])
-                    root.destroy()
-                return True
+        self.duty_var.set(f"{self.settings['duty_cycle']:.2f}")
+        self.hold_var.set(f"{self.settings.get('hold_time', 0.0):.2f}")
+        self.limit_var.set(self.settings["limit_enabled"])
+        self.limit_count_var.set(str(self.settings["click_limit"]))
+
+        self.theme_var.set(self.settings["theme"])
+
+        self.clicker_engine.settings = self.settings
+        self.hotkey_manager.settings = self.settings
+        
+    def check_for_updates(self):
+        self.update_status_label.config(text="Checking for updates...")
+        threading.Thread(target=self._check_updates_thread, daemon=True).start()
+        
+    def check_for_updates_silently(self):
+        threading.Thread(target=self._check_updates_thread, args=(True,), daemon=True).start()
+        
+    def _check_updates_thread(self, silent=False):
+        try:
+            import requests
+            from packaging import version
+            
+            response = requests.get(f"{GITHUB_REPO}/releases/latest", timeout=5)
+            if response.status_code == 200:
+                latest_version_str = response.url.split("/")[-1]
+                if latest_version_str.startswith("v"):
+                    latest_version_str = latest_version_str[1:]
+                    
+                latest_version = version.parse(latest_version_str)
+                current_version = version.parse(VERSION)
+                
+                if latest_version > current_version:
+                    self.root.after(0, lambda: self.update_status_label.config(
+                        text=f"New version available: {latest_version_str}"
+                    ))
+                    
+                    if not silent:
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "Update Available",
+                            f"A new version ({latest_version_str}) is available!\n\n"
+                            f"You are currently using version {VERSION}.\n\n"
+                            f"Visit the GitHub repository to download the latest version."
+                        ))
+                else:
+                    if not silent:
+                        self.root.after(0, lambda: self.update_status_label.config(
+                            text=f"You have the latest version ({VERSION})"
+                        ))
+                        self.root.after(0, lambda: messagebox.showinfo(
+                            "No Updates",
+                            f"You are using the latest version ({VERSION})."
+                        ))
+                    else:
+                        self.root.after(0, lambda: self.update_status_label.config(
+                            text=f"Version {VERSION} (latest)"
+                        ))
             else:
-                if show_message:
-                    messagebox.showinfo("No Updates", "You are using the latest version.")
-                return False
-        else:
-            if show_message:
-                messagebox.showerror("Update Check Failed", "Failed to check for updates. Please try again later.")
-            return False
-    
-    except Exception as e:
-        app_logger.error(f"Error checking for updates: {e}", exc_info=True)
-        if show_message:
-            messagebox.showerror("Update Check Failed", f"Error checking for updates: {e}")
+                if not silent:
+                    self.root.after(0, lambda: self.update_status_label.config(
+                        text="Could not check for updates"
+                    ))
+                    self.root.after(0, lambda: messagebox.showwarning(
+                        "Update Check Failed",
+                        "Could not check for updates. Please try again later."
+                    ))
+                
+        except Exception as e:
+            print(f"Error checking for updates: {e}")
+            if not silent:
+                self.root.after(0, lambda: self.update_status_label.config(
+                    text="Error checking for updates"
+                ))
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "Update Check Failed",
+                    f"Error checking for updates: {str(e)}"
+                ))
+                
+    def on_close(self):
+        try:
+            self.settings["interval_ms"] = self.interval_entry.get_float()
+            self.settings["duty_cycle"] = self.duty_entry.get_float()
+            self.settings["hold_time"] = self.hold_entry.get_float()
+            self.settings["click_limit"] = self.limit_entry.get_int()
+            save_settings(self.settings)
+        except Exception as e:
+            print(f"Error saving settings on close: {e}")
+
+        if self.clicker_engine.clicking:
+            self.clicker_engine.stop_clicking()
+
+        if self.hotkey_manager:
+            self.hotkey_manager.stop_listener()
+            
+        self.root.destroy()
+        
+    def run(self):
+        self.root.mainloop()
+
+def check_macos_version():
+    """Check if running on macOS and return version info."""
+    if platform.system() != "Darwin":
+        messagebox.showerror(
+            "Unsupported Operating System",
+            "This application is designed for macOS only."
+        )
+        sys.exit(1)
+        
+    version_str = platform.mac_ver()[0]
+    version_parts = [int(x) for x in version_str.split('.')]
+
+    if version_parts[0] < 10 or (version_parts[0] == 10 and version_parts[1] < 12):
+        messagebox.showwarning(
+            "Unsupported macOS Version",
+            f"You are running macOS {version_str}. This application works best on macOS 10.12 (Sierra) or newer."
+        )
+
+def check_dependencies():
+    """Check if all required dependencies are installed."""
+    try:
+        import pynput
+        from Quartz import CGEventCreate
+        return True
+    except ImportError as e:
+        messagebox.showerror(
+            "Missing Dependencies",
+            f"Error: {str(e)}\n\n"
+            "Please install the required dependencies by running:\n"
+            "pip3 install -r requirements.txt"
+        )
         return False
-
-def perform_click():
-    """Perform a single click"""
-    global click_count
-    
-    try:
-        if hold_time > 0:
-            press_duration = hold_time / 1000.0 
-        else:
-            press_duration = click_interval * (duty_cycle / 100.0)
-
-        if mouse_button == "left":
-            pyautogui.mouseDown(button="left")
-            time.sleep(press_duration)
-            pyautogui.mouseUp(button="left")
-        elif mouse_button == "right":
-            pyautogui.mouseDown(button="right")
-            time.sleep(press_duration)
-            pyautogui.mouseUp(button="right")
-        elif mouse_button == "middle":
-            pyautogui.mouseDown(button="middle")
-            time.sleep(press_duration)
-            pyautogui.mouseUp(button="middle")
-
-        click_count += 1
-        if click_counter_var:
-            click_counter_var.set(f"Clicks: {click_count}")
-
-        x, y = pyautogui.position()
-        app_logger.log_click_event("click", mouse_button, x, y)
-
-        if limit_enabled and click_count >= click_limit:
-            stop_clicking()
-            messagebox.showinfo("Click Limit Reached", f"Completed {click_limit} clicks.")
-    
-    except Exception as e:
-        app_logger.error(f"Error performing click: {e}", exc_info=True)
-
-def clicking_thread():
-    """Thread function for continuous clicking"""
-    global clicking
-    
-    try:
-        while clicking:
-            perform_click()
-            release_duration = click_interval - (click_interval * (duty_cycle / 100.0))
-            if release_duration < 0:
-                release_duration = 0
-
-            time.sleep(release_duration)
-    
-    except Exception as e:
-        app_logger.error(f"Error in clicking thread: {e}", exc_info=True)
-        clicking = False
-        update_ui_state()
-
-def start_clicking():
-    """Start the autoclicker"""
-    global clicking, click_count, click_thread
-    
-    if clicking:
-        return
-    
-    try:
-        if limit_enabled:
-            click_count = 0
-            if click_counter_var:
-                click_counter_var.set(f"Clicks: {click_count}")
-
-        clicking = True
-        update_ui_state()
-
-        click_thread = threading.Thread(target=clicking_thread)
-        click_thread.daemon = True
-        click_thread.start()
-        
-        app_logger.info("Clicking started")
-    
-    except Exception as e:
-        app_logger.error(f"Error starting clicking: {e}", exc_info=True)
-        clicking = False
-        update_ui_state()
-
-def stop_clicking():
-    """Stop the autoclicker"""
-    global clicking
-    
-    if not clicking:
-        return
-    
-    try:
-        clicking = False
-        update_ui_state()
-        
-        app_logger.info("Clicking stopped")
-    
-    except Exception as e:
-        app_logger.error(f"Error stopping clicking: {e}", exc_info=True)
-
-def toggle_clicking():
-    """Toggle the autoclicker on/off"""
-    if clicking:
-        stop_clicking()
-    else:
-        start_clicking()
-
-def update_ui_state():
-    """Update UI elements based on clicking state"""
-    if clicking:
-        if start_btn:
-            start_btn.config(state="disabled")
-        if stop_btn:
-            stop_btn.config(state="normal")
-        if status_var:
-            status_var.set("Status: Running")
-        if status_indicator:
-            status_indicator.config(background="#4CAF50") 
-    else:
-        if start_btn:
-            start_btn.config(state="normal")
-        if stop_btn:
-            stop_btn.config(state="disabled")
-        if status_var:
-            status_var.set("Status: Stopped")
-        if status_indicator:
-            status_indicator.config(background="#F44336")  
-
-def on_key_press(key):
-    """Handle key press events"""
-    global capturing_hotkey
-    
-    try:
-
-        if capturing_hotkey:
-
-            if hasattr(key, 'char') and key.char:
-                key_str = key.char
-            elif hasattr(key, 'name'):
-                key_str = key.name
-            else:
-                key_str = str(key).replace("Key.", "")
-
-            hotkey["type"] = "keyboard"
-            hotkey["keys"] = [key_str.lower()]
-            hotkey["button"] = None
-
-            if hotkey_display_var:
-                hotkey_display_var.set(f"Current Hotkey: {key_str}")
-
-            capturing_hotkey = False
-            
-            app_logger.log_hotkey_event("set", hotkey["keys"])
-            return False
-
-        if hotkey["type"] == "keyboard" and not clicking:
-
-            if hasattr(key, 'char') and key.char:
-                key_str = key.char
-            elif hasattr(key, 'name'):
-                key_str = key.name
-            else:
-                key_str = str(key).replace("Key.", "")
-
-            if key_str.lower() in hotkey["keys"]:
-                if click_mode == "toggle":
-                    toggle_clicking()
-                elif click_mode == "hold":
-                    start_clicking()
-                
-                app_logger.log_hotkey_event("pressed", hotkey["keys"])
-    
-    except Exception as e:
-        app_logger.error(f"Error in key press handler: {e}", exc_info=True)
-    
-    return True
-    
-def on_key_release(key):
-    """Handle key release events"""
-    try:
-        if click_mode == "hold" and clicking and hotkey["type"] == "keyboard":
-            if hasattr(key, 'char') and key.char:
-                key_str = key.char
-            elif hasattr(key, 'name'):
-                key_str = key.name
-            else:
-                key_str = str(key).replace("Key.", "")
-
-            if key_str.lower() in hotkey["keys"]:
-                stop_clicking()
-                app_logger.log_hotkey_event("released", hotkey["keys"])
-    
-    except Exception as e:
-        app_logger.error(f"Error in key release handler: {e}", exc_info=True)
-    
-    return True
-
-def on_mouse_click(x, y, button, pressed):
-    """Handle mouse click events"""
-    global capturing_hotkey
-    
-    try:
-        if capturing_hotkey and pressed:
-            hotkey["type"] = "mouse"
-            hotkey["keys"] = []
-            hotkey["button"] = str(button).replace("Button.", "")
-
-            if hotkey_display_var:
-                hotkey_display_var.set(f"Current Hotkey: Mouse {hotkey['button']}")
-
-            capturing_hotkey = False
-            
-            app_logger.log_hotkey_event("set", [f"Mouse {hotkey['button']}"])
-            return False
-
-        if hotkey["type"] == "mouse" and not clicking:
-            button_str = str(button).replace("Button.", "")
-            if button_str == hotkey["button"] and pressed:
-                if click_mode == "toggle":
-                    toggle_clicking()
-                elif click_mode == "hold":
-                    start_clicking()
-                
-                app_logger.log_hotkey_event("pressed", [f"Mouse {hotkey['button']}"])
-
-        if click_mode == "hold" and clicking and hotkey["type"] == "mouse":
-            button_str = str(button).replace("Button.", "")
-            if button_str == hotkey["button"] and not pressed:
-                stop_clicking()
-                app_logger.log_hotkey_event("released", [f"Mouse {hotkey['button']}"])
-    
-    except Exception as e:
-        app_logger.error(f"Error in mouse click handler: {e}", exc_info=True)
-    
-    return True
-
-def start_hotkey_capture():
-    """Start capturing a new hotkey"""
-    global capturing_hotkey
-    
-    try:
-        capturing_hotkey = True
-        if hotkey_display_var:
-            hotkey_display_var.set("Press any key or mouse button...")
-        
-        app_logger.info("Hotkey capture started")
-    
-    except Exception as e:
-        app_logger.error(f"Error starting hotkey capture: {e}", exc_info=True)
-
-def create_ui():
-    """Create the main UI"""
-    global root, start_btn, stop_btn, status_indicator, cps_var, duty_var, hold_var
-    global button_var, mode_var, limit_var, limit_entry, status_var, click_counter_var
-    global hotkey_display_var, theme_var
-
-    root = tk.Tk()
-    root.title(f"Aerout SpeedAutoClicker v{VERSION}")
-    root.geometry("500x600")
-    root.minsize(500, 600)
-
-    validate_numeric = root.register(validate_numeric_input)
-
-    cps_var = tk.StringVar(value="10.0")
-    duty_var = tk.StringVar(value=str(duty_cycle))
-    hold_var = tk.StringVar(value=str(hold_time))
-    button_var = tk.StringVar(value=mouse_button)
-    mode_var = tk.StringVar(value=click_mode)
-    limit_var = tk.BooleanVar(value=limit_enabled)
-    status_var = tk.StringVar(value="Status: Stopped")
-    click_counter_var = tk.StringVar(value="Clicks: 0")
-    hotkey_display_var = tk.StringVar(value=f"Current Hotkey: {hotkey['keys'][0] if hotkey['type'] == 'keyboard' else 'Mouse ' + hotkey['button']}")
-    theme_var = tk.StringVar(value=theme)
-
-    notebook = ttk.Notebook(root)
-    notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-    main_frame = ttk.Frame(notebook)
-    notebook.add(main_frame, text="Main")
-
-    title_frame = ttk.Frame(main_frame)
-    title_frame.pack(fill=tk.X, pady=10)
-    
-    title_label = ttk.Label(title_frame, text="Aerout SpeedAutoClicker", font=("Helvetica", 16, "bold"))
-    title_label.pack(side=tk.TOP)
-    
-    version_label = ttk.Label(title_frame, text=f"Version {VERSION}")
-    version_label.pack(side=tk.TOP)
-
-    status_frame = ttk.Frame(main_frame)
-    status_frame.pack(fill=tk.X, pady=10)
-    
-    status_label = ttk.Label(status_frame, textvariable=status_var)
-    status_label.pack(side=tk.LEFT, padx=5)
-    
-    status_indicator = tk.Label(status_frame, width=3, height=1, background="#F44336")
-    status_indicator.pack(side=tk.LEFT, padx=5)
-    
-    click_counter_label = ttk.Label(status_frame, textvariable=click_counter_var)
-    click_counter_label.pack(side=tk.RIGHT, padx=5)
-
-    cps_frame = ttk.LabelFrame(main_frame, text="Click Speed")
-    cps_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    cps_label = ttk.Label(cps_frame, text="Clicks Per Second (CPS):")
-    cps_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    cps_entry = ttk.Entry(cps_frame, textvariable=cps_var, validate="key", validatecommand=(validate_numeric, '%P'))
-    cps_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-    cps_var.trace_add("write", update_click_interval)
-    button_frame = ttk.LabelFrame(main_frame, text="Mouse Button")
-    button_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    left_button = ttk.Radiobutton(button_frame, text="Left", variable=button_var, value="left")
-    left_button.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    right_button = ttk.Radiobutton(button_frame, text="Right", variable=button_var, value="right")
-    right_button.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-    
-    middle_button = ttk.Radiobutton(button_frame, text="Middle", variable=button_var, value="middle")
-    middle_button.grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-
-    mode_frame = ttk.LabelFrame(main_frame, text="Click Mode")
-    mode_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    toggle_mode = ttk.Radiobutton(mode_frame, text="Toggle (Start/Stop)", variable=mode_var, value="toggle")
-    toggle_mode.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    hold_mode = ttk.Radiobutton(mode_frame, text="Hold (Press and Hold)", variable=mode_var, value="hold")
-    hold_mode.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-
-    hotkey_frame = ttk.LabelFrame(main_frame, text="Hotkey")
-    hotkey_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    hotkey_label = ttk.Label(hotkey_frame, textvariable=hotkey_display_var)
-    hotkey_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    hotkey_button = ttk.Button(hotkey_frame, text="Set Hotkey", command=start_hotkey_capture)
-    hotkey_button.grid(row=0, column=1, sticky=tk.E, padx=5, pady=5)
-
-    control_frame = ttk.Frame(main_frame)
-    control_frame.pack(fill=tk.X, pady=20, padx=10)
-    
-    start_btn = ttk.Button(control_frame, text="Start (F6)", command=start_clicking)
-    start_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
-    
-    stop_btn = ttk.Button(control_frame, text="Stop (F6)", command=stop_clicking, state="disabled")
-    stop_btn.pack(side=tk.RIGHT, padx=5, expand=True, fill=tk.X)
-
-    advanced_frame = ttk.Frame(notebook)
-    notebook.add(advanced_frame, text="Advanced")
-
-    duty_frame = ttk.LabelFrame(advanced_frame, text="Click Pattern")
-    duty_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    duty_label = ttk.Label(duty_frame, text="Duty Cycle (%):")
-    duty_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    duty_entry = ttk.Entry(duty_frame, textvariable=duty_var, validate="key", validatecommand=(validate_numeric, '%P'))
-    duty_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-    duty_var.trace_add("write", update_duty_cycle)
-    
-    duty_info = ttk.Label(duty_frame, text="(50% = balanced, higher = longer press)")
-    duty_info.grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-    
-    hold_label = ttk.Label(duty_frame, text="Hold Time (ms):")
-    hold_label.grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    hold_entry = ttk.Entry(duty_frame, textvariable=hold_var, validate="key", validatecommand=(validate_numeric, '%P'))
-    hold_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-    hold_var.trace_add("write", update_hold_time)
-    
-    hold_info = ttk.Label(duty_frame, text="(0 = use duty cycle)")
-    hold_info.grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
-
-    limit_frame = ttk.LabelFrame(advanced_frame, text="Click Limit")
-    limit_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    limit_check = ttk.Checkbutton(limit_frame, text="Limit Clicks", variable=limit_var, command=toggle_limit_entry)
-    limit_check.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    limit_entry = ttk.Entry(limit_frame, validate="key", validatecommand=(validate_numeric, '%P'))
-    limit_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-    limit_entry.insert(0, str(click_limit))
-    if not limit_enabled:
-        limit_entry.config(state="disabled")
-
-    config_frame = ttk.LabelFrame(advanced_frame, text="Configurations")
-    config_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    config_name_label = ttk.Label(config_frame, text="Configuration Name:")
-    config_name_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    config_name_entry = ttk.Entry(config_frame)
-    config_name_entry.grid(row=0, column=1, columnspan=2, sticky=tk.EW, padx=5, pady=5)
-    
-    export_btn = ttk.Button(config_frame, text="Export", command=lambda: export_config(config_name_entry.get()))
-    export_btn.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-    
-    import_btn = ttk.Button(config_frame, text="Import", command=lambda: import_config(config_name_entry.get()))
-    import_btn.grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
-
-    diag_frame = ttk.LabelFrame(advanced_frame, text="Diagnostic Tools")
-    diag_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    diag_btn = ttk.Button(diag_frame, text="Create Diagnostic Report", 
-                          command=lambda: messagebox.showinfo("Diagnostic Report", 
-                                                             f"Report created: {app_logger.create_diagnostic_report()}"))
-    diag_btn.pack(fill=tk.X, padx=5, pady=5)
-
-    settings_frame = ttk.Frame(notebook)
-    notebook.add(settings_frame, text="Settings")
-
-    theme_frame = ttk.LabelFrame(settings_frame, text="Theme")
-    theme_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    default_theme = ttk.Radiobutton(theme_frame, text="Default", variable=theme_var, value="default", command=apply_theme)
-    default_theme.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    light_theme = ttk.Radiobutton(theme_frame, text="Light", variable=theme_var, value="light", command=apply_theme)
-    light_theme.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
-    
-    dark_theme = ttk.Radiobutton(theme_frame, text="Dark", variable=theme_var, value="dark", command=apply_theme)
-    dark_theme.grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
-    
-    custom_theme = ttk.Radiobutton(theme_frame, text="Custom", variable=theme_var, value="custom", command=apply_theme)
-    custom_theme.grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-    
-    custom_color_btn = ttk.Button(theme_frame, text="Choose Colors", command=choose_custom_color)
-    custom_color_btn.grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=5, pady=5)
-
-    save_settings_btn = ttk.Button(settings_frame, text="Save Settings", command=save_current_settings)
-    save_settings_btn.pack(fill=tk.X, pady=10, padx=10)
-
-    update_frame = ttk.LabelFrame(settings_frame, text="Updates")
-    update_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    check_update_btn = ttk.Button(update_frame, text="Check for Updates", command=lambda: check_for_updates(True))
-    check_update_btn.pack(fill=tk.X, padx=5, pady=5)
-
-    about_frame = ttk.LabelFrame(settings_frame, text="About")
-    about_frame.pack(fill=tk.X, pady=10, padx=10)
-    
-    about_text = tk.Text(about_frame, height=8, wrap=tk.WORD)
-    about_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-    about_text.insert(tk.END, "Aerout SpeedAutoClicker for macOS\n\n")
-    about_text.insert(tk.END, "A good autoclicker with cool features.\n\n")
-    about_text.insert(tk.END, "© 2025 Aerout\n\n")
-    about_text.insert(tk.END, "Join our Discord server for updates and help:\nhttps://discord.gg/shA7X2Wesr")
-    about_text.config(state=tk.DISABLED)
-
-    apply_theme()
-
-    keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release)
-    keyboard_listener.start()
-    
-    mouse_listener = mouse.Listener(on_click=on_mouse_click)
-    mouse_listener.start()
-
-    root.protocol("WM_DELETE_WINDOW", on_close)
-
-    root.after(1000, lambda: check_for_updates(False))
-    
-    return root
-
-def on_close():
-    """Handle window close event"""
-    try:
-        if clicking:
-            stop_clicking()
-
-        save_settings()
-
-        root.destroy()
-        
-        app_logger.info("Application closed")
-    
-    except Exception as e:
-        app_logger.error(f"Error during application close: {e}", exc_info=True)
-        root.destroy()
 
 def main():
-    """Main function"""
+    """Main entry point for the application."""
     try:
-        load_settings()
+        check_macos_version()
 
-        app = create_ui()
+        if not check_dependencies():
+            sys.exit(1)
 
-        app.mainloop()
-    
+        app = AeroutSpeedAutoClickerGUI()
+        app.run()
+        
     except Exception as e:
-        app_logger.error(f"Error in main function: {e}", exc_info=True)
-        messagebox.showerror("Error", f"An error occurred: {e}\n\nCheck the logs for details.")
+        error_message = f"An unexpected error occurred:\n{str(e)}"
+        print(error_message)
+        messagebox.showerror("Error", error_message)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
