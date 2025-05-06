@@ -36,6 +36,7 @@ A high-performance autoclicker with advanced features for macOS.
 2. Extract the ZIP file
 3. Run the installer script:
    ```
+   chmod +x install.sh
    ./install.sh
    ```
 4. Follow the on-screen instructions
