@@ -1,3 +1,5 @@
+# DISCONTINUED UNTIL I FIND MOTIVATION AGAIN
+
 # 🚀 Aerout SpeedAutoClicker for macOS
 
 A high-performance autoclicker with advanced features for macOS.
