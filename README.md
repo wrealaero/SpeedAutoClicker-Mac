@@ -23,7 +23,7 @@ A high-performance autoclicker with advanced features for macOS.
 ## 📋 Requirements
 
 - macOS High Sierra (10.13) or newer
-- Python 3.6 or newer
+- Python 3.6+
 - Required Python packages (automatically installed):
   - pyautogui
   - pynput
