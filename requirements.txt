@@ -1,9 +1,8 @@
 pynput>=1.7.6
-requests>=2.28.1
-packaging>=21.3
-pyobjc-core>=8.5.0; sys_platform == 'darwin'
-pyobjc-framework-Cocoa>=8.5.0; sys_platform == 'darwin'
-pyobjc-framework-Quartz>=8.5.0; sys_platform == 'darwin'
-simplejson>=3.17.6  # Better JSON handling
-python-colormath>=3.0.0  # Better color management
-tkfilebrowser>=2.3.2  # Better file dialogs
+requests>=2.31.0
+packaging>=23.2
+pyobjc-core>=9.2.0; sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=9.2.0; sys_platform == 'darwin'
+pyobjc-framework-Quartz>=9.2.0; sys_platform == 'darwin'
+simplejson>=3.19.2
+tkfilebrowser>=2.3.2
