@@ -31,16 +31,16 @@ A high-performance autoclicker with advanced features for macOS.
   - pyobjc
   - requests
 
-## 🔧 Installation
+### Easy Install
 
-1. Download latest release ZIP
-2. Extract files
-3. Run installer:
-   ```bash
+1. Download the latest release from the [Releases page](https://github.com/wrealaero/SpeedAutoClicker-Mac/releases)
+2. Extract the ZIP file
+3. Run the installer script:
+   ```
    chmod +x install.sh
    ./install.sh
    ```
-4. Choose to run immediately or later
+4. Follow the on-screen instructions
 
 ## 🎮 Basic Usage
 
