@@ -37,7 +37,7 @@ except ImportError as e:
     print("pip3 install pynput==1.7.6")
     sys.exit(1)
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 SETTINGS_FILE = os.path.expanduser("~/.aeroutclicker.json")
 DISCORD_URL = "https://discord.com/shA7X2Wesr"
 GITHUB_REPO = "https://github.com/wrealaero/SpeedAutoClicker-Mac"
@@ -228,13 +228,15 @@ class EnhancedHotkeyManager:
                 else:
                     return key.name
             elif isinstance(key, KeyCode):
-                if hasattr(key, 'char') and key.char:
+                if key.char is not None:
                     return key.char.lower()
-                elif hasattr(key, 'vk') and key.vk:
+                elif key.vk is not None:
                     if 48 <= key.vk <= 57:
                         return chr(key.vk)
                     elif 65 <= key.vk <= 90:
                         return chr(key.vk + 32)
+                    elif key.vk >= 96 and key.vk <= 105:  # Handle numpad keys
+                        return str(key.vk - 96)
             return None
         except Exception as e:
             print(f"Error converting key: {e}")
@@ -927,7 +929,7 @@ class AeroutSpeedAutoClickerGUI:
         
         ttk.Label(
             about_frame, 
-            text="© 2024 Aerout - Realaero <3",
+            text="© 2025 Aerout - Realaero <3",
             font=("Arial", 9)
         ).pack(pady=(0, 5))
         
@@ -1152,12 +1154,20 @@ class AeroutSpeedAutoClickerGUI:
             
             response = requests.get(f"{GITHUB_REPO}/releases/latest", timeout=5)
             if response.status_code == 200:
-                latest_version_str = response.url.split("/")[-1]
-                if latest_version_str.startswith("v"):
-                    latest_version_str = latest_version_str[1:]
-                    
-                latest_version = version.parse(latest_version_str)
-                current_version = version.parse(VERSION)
+                try:
+                    data = response.json()
+                    latest_version_str = data.get('tag_name', '').lstrip('v')
+                except ValueError:
+                    latest_version_str = response.url.split("/")[-1]
+                    if latest_version_str.startswith("v"):
+                        latest_version_str = latest_version_str[1:]
+                
+                try:
+                    latest_version = version.parse(latest_version_str)
+                    current_version = version.parse(VERSION)
+                except version.InvalidVersion:
+                    print(f"Invalid version format: {latest_version_str}")
+                    return
                 
                 if latest_version > current_version:
                     self.root.after(0, lambda: self.update_status_label.config(
