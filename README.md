@@ -1,6 +1,3 @@
-Here's your updated README.md with the requested changes:
-
-```markdown
 # 🚀 Aerout SpeedAutoClicker for macOS
 
 A high-performance autoclicker with advanced features for macOS.
@@ -67,4 +64,4 @@ MIT License - See included LICENSE file
 
 ---
 
-Made with ❤️ by RealAero <3
+Made with ❤️ by RealAero
