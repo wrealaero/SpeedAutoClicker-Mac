@@ -1,3 +1,5 @@
+## Starting to work on tryna make this work for both Windows & Linux
+
 # 🚀 Aerout SpeedAutoClicker for macOS
 
 A high-performance autoclicker with advanced features for macOS.
