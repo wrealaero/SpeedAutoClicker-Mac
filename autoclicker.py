@@ -37,9 +37,9 @@ except ImportError as e:
     print("pip3 install pynput==1.7.6")
     sys.exit(1)
 
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 SETTINGS_FILE = os.path.expanduser("~/.aeroutclicker.json")
-DISCORD_URL = "https://discord.com/shA7X2Wesr"
+DISCORD_URL = "COMING SOON LMAO"
 GITHUB_REPO = "https://github.com/wrealaero/SpeedAutoClicker-Mac"
 
 DEFAULT_SETTINGS = {
@@ -51,6 +51,7 @@ DEFAULT_SETTINGS = {
     "limit_enabled": False,
     "click_limit": 100,
     "theme": "default",
+    "pause_on_movement": True,
     "custom_colors": {
         "bg": "#f0f0f0",
         "fg": "#000000",
@@ -62,6 +63,7 @@ DEFAULT_SETTINGS = {
     },
     "last_update_check": None
 }
+
 
 def load_settings():
     try:
@@ -235,7 +237,7 @@ class EnhancedHotkeyManager:
                         return chr(key.vk)
                     elif 65 <= key.vk <= 90:
                         return chr(key.vk + 32)
-                    elif key.vk >= 96 and key.vk <= 105:  # Handle numpad keys
+                    elif key.vk >= 96 and key.vk <= 105:
                         return str(key.vk - 96)
             return None
         except Exception as e:
@@ -256,6 +258,10 @@ class AdvancedClickerEngine:
         self.stop_event = threading.Event()
         self.click_count = 0
         self.event_source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+        self.last_mouse_position = (0, 0)
+        self.movement_threshold = 5 
+        self.movement_detected = False
+        
         self.button_map = {
             "left": {
                 "down": kCGEventLeftMouseDown,
@@ -273,11 +279,18 @@ class AdvancedClickerEngine:
                 "button": kCGMouseButtonCenter
             }
         }
-        
+
     def get_mouse_position(self):
         event = CGEventCreate(None)
-        return CGEventGetLocation(event)
-        
+        position = CGEventGetLocation(event)
+        if (abs(position.x - self.last_mouse_position[0]) > self.movement_threshold or
+            abs(position.y - self.last_mouse_position[1]) > self.movement_threshold):
+            self.movement_detected = True
+        else:
+            self.movement_detected = False
+        self.last_mouse_position = position
+        return position
+
     def perform_click(self, position, button_type="left"):
         try:
             button_info = self.button_map.get(button_type, self.button_map["left"])
@@ -289,24 +302,23 @@ class AdvancedClickerEngine:
                 button_info["button"]
             )
 
-            mouse_up = CGEventCreateMouseEvent(
-                self.event_source,
-                button_info["up"],
-                position,
-                button_info["button"]
-            )
-
             CGEventPost(kCGHIDEventTap, mouse_down)
 
             hold_time = self.settings.get("hold_time", 0.0)
             if hold_time > 0:
                 time.sleep(hold_time / 1000.0)
             else:
-                interval_ms = self.settings["interval_ms"]
-                duty_cycle = self.settings["duty_cycle"]
+                interval_ms = max(1.0, self.settings["interval_ms"])
+                duty_cycle = max(1.0, min(99.0, self.settings["duty_cycle"]))
                 on_time = (interval_ms * duty_cycle) / 100.0 / 1000.0
                 time.sleep(on_time)
 
+            mouse_up = CGEventCreateMouseEvent(
+                self.event_source,
+                button_info["up"],
+                position,
+                button_info["button"]
+            )
             CGEventPost(kCGHIDEventTap, mouse_up)
             
             return True
@@ -324,6 +336,12 @@ class AdvancedClickerEngine:
                 self.status_callback("Running")
                 
             while not self.stop_event.is_set():
+                start_time = time.perf_counter()
+
+                if self.movement_detected and self.settings.get("pause_on_movement", True):
+                    time.sleep(0.01)
+                    continue
+                    
                 position = self.get_mouse_position()
                 success = self.perform_click(position, self.settings["mouse_button"])
                 
@@ -332,15 +350,17 @@ class AdvancedClickerEngine:
                     if limit_enabled and self.click_count >= click_limit:
                         break
 
-                interval_ms = self.settings["interval_ms"]
+                interval_ms = max(1.0, self.settings["interval_ms"])
                 hold_time = self.settings.get("hold_time", 0.0)
                 
                 if hold_time > 0:
-                    wait_time = interval_ms / 1000.0
+                    elapsed = (time.perf_counter() - start_time) * 1000
+                    wait_time = max(0, (interval_ms - hold_time - elapsed) / 1000.0)
                 else:
-                    duty_cycle = self.settings["duty_cycle"]
+                    duty_cycle = max(1.0, min(99.0, self.settings["duty_cycle"]))
                     on_time = (interval_ms * duty_cycle) / 100.0 / 1000.0
-                    wait_time = (interval_ms / 1000.0) - on_time
+                    elapsed = (time.perf_counter() - start_time) * 1000
+                    wait_time = max(0, (interval_ms - elapsed) / 1000.0)
                     
                 if wait_time > 0 and not self.stop_event.is_set():
                     time.sleep(wait_time)
@@ -521,10 +541,14 @@ class IntEntry(ttk.Entry):
 class AeroutSpeedAutoClickerGUI:
     def __init__(self):
         self.settings = load_settings()
-        self.clicker_engine = AdvancedClickerEngine(self.settings, self.update_status)
+        self.root = tk.Tk()
+
+        self.clicker_engine = AdvancedClickerEngine(self.settings)
+
+        self.clicker_engine.status_callback = self.update_status
+        
         self.hotkey_manager = EnhancedHotkeyManager(self.clicker_engine.handle_hotkey, self.settings)
         
-        self.root = tk.Tk()
         self.root.title(f"Aerout SpeedAutoClicker v{VERSION}")
         self.root.geometry("500x650")
         self.root.resizable(False, False)
@@ -585,51 +609,79 @@ class AeroutSpeedAutoClickerGUI:
         
     def apply_theme(self):
         theme = self.settings.get("theme", "default")
+        colors = self.settings.get("custom_colors", DEFAULT_SETTINGS["custom_colors"])
         
         if theme == "dark":
-            self.root.configure(bg="#2d2d2d")
-            self.style.configure("TFrame", background="#2d2d2d")
-            self.style.configure("TLabel", background="#2d2d2d", foreground="#ffffff")
-            self.style.configure("TButton", background="#3d3d3d", foreground="#ffffff")
-            self.style.configure("TCheckbutton", background="#2d2d2d", foreground="#ffffff")
-            self.style.configure("TRadiobutton", background="#2d2d2d", foreground="#ffffff")
-            self.style.configure("TNotebook", background="#2d2d2d", foreground="#ffffff")
-            self.style.configure("TNotebook.Tab", background="#3d3d3d", foreground="#ffffff")
-            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background="#2d2d2d", foreground="#ffffff")
-            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background="#2d2d2d", foreground="#ffffff")
+            bg = "#2d2d2d"
+            fg = "#ffffff"
+            accent = "#3d3d3d"
         elif theme == "light":
-            self.root.configure(bg="#f0f0f0")
-            self.style.configure("TFrame", background="#f0f0f0")
-            self.style.configure("TLabel", background="#f0f0f0", foreground="#000000")
-            self.style.configure("TButton", background="#e0e0e0", foreground="#000000")
-            self.style.configure("TCheckbutton", background="#f0f0f0", foreground="#000000")
-            self.style.configure("TRadiobutton", background="#f0f0f0", foreground="#000000")
-            self.style.configure("TNotebook", background="#f0f0f0", foreground="#000000")
-            self.style.configure("TNotebook.Tab", background="#e0e0e0", foreground="#000000")
-            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background="#f0f0f0", foreground="#000000")
-            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background="#f0f0f0", foreground="#000000")
+            bg = "#f0f0f0"
+            fg = "#000000"
+            accent = "#e0e0e0"
         elif theme == "custom":
-            colors = self.settings.get("custom_colors", {})
-            bg_color = colors.get("bg", "#f0f0f0")
-            fg_color = colors.get("fg", "#000000")
-            accent_color = colors.get("accent", "#0078d7")
-            
-            self.root.configure(bg=bg_color)
-            self.style.configure("TFrame", background=bg_color)
-            self.style.configure("TLabel", background=bg_color, foreground=fg_color)
-            self.style.configure("TButton", background=accent_color, foreground=fg_color)
-            self.style.configure("TCheckbutton", background=bg_color, foreground=fg_color)
-            self.style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
-            self.style.configure("TNotebook", background=bg_color, foreground=fg_color)
-            self.style.configure("TNotebook.Tab", background=accent_color, foreground=fg_color)
-            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"), background=bg_color, foreground=fg_color)
-            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"), background=bg_color, foreground=fg_color)
+            bg = colors["bg"]
+            fg = colors["fg"]
+            accent = colors["accent"]
         else:
-            self.style.configure("TFrame", padding=5)
-            self.style.configure("TLabel", padding=2)
-            self.style.configure("TButton", padding=5)
-            self.style.configure("Header.TLabel", font=("Arial", 12, "bold"))
-            self.style.configure("Title.TLabel", font=("Arial", 16, "bold"))
+            bg = "#f0f0f0"
+            fg = "#000000"
+            accent = "#0078d7"
+
+        self.root.config(bg=bg)
+
+        self.style.theme_use('clam')
+        
+        self.style.configure('.', 
+            background=bg,
+            foreground=fg,
+            font=('Arial', 10)
+        )
+        
+        self.style.configure('TFrame', background=bg)
+        self.style.configure('TLabel', background=bg, foreground=fg)
+        self.style.configure('TButton', 
+            background=accent, 
+            foreground=fg,
+            borderwidth=1,
+            relief='raised',
+            padding=5
+        )
+        self.style.map('TButton',
+            background=[('active', accent), ('disabled', bg)],
+            relief=[('pressed', 'sunken'), ('!pressed', 'raised')]
+        )
+        self.style.configure('TCheckbutton', background=bg, foreground=fg)
+        self.style.configure('TRadiobutton', background=bg, foreground=fg)
+        self.style.configure('TEntry', 
+            fieldbackground='white',
+            foreground='black',
+            insertcolor='black'
+        )
+        self.style.configure('TNotebook', background=bg)
+        self.style.configure('TNotebook.Tab', 
+            background=bg,
+            foreground=fg,
+            padding=[10, 5]
+        )
+        self.style.map('TNotebook.Tab',
+            background=[('selected', accent)],
+            foreground=[('selected', fg)]
+        )
+
+        self.style.configure('Header.TLabel', 
+            font=('Arial', 12, 'bold'),
+            background=bg,
+            foreground=fg
+        )
+        self.style.configure('Title.TLabel', 
+            font=('Arial', 16, 'bold'),
+            background=bg,
+            foreground=fg
+        )
+
+        for widget in self.root.winfo_children():
+            widget.update()
 
     def build_main_tab(self):
         self.create_section_label(self.main_tab, "Click Interval")
@@ -814,10 +866,111 @@ class AeroutSpeedAutoClickerGUI:
         
         ttk.Label(limit_frame, text="clicks").pack(side="left")
 
+        self.create_section_label(self.advanced_tab, "Movement Handling")
+        
+        movement_frame = ttk.Frame(self.advanced_tab)
+        movement_frame.pack(fill="x", pady=5)
+        
+        self.pause_movement_var = tk.BooleanVar(value=self.settings.get("pause_on_movement", True))
+        pause_movement_check = ttk.Checkbutton(
+            movement_frame,
+            text="Pause clicking when mouse moves",
+            variable=self.pause_movement_var,
+            command=self.update_pause_movement
+        )
+        pause_movement_check.pack(anchor="w")
+
+        ttk.Label(
+            movement_frame,
+            text="(Will automatically pause clicking if mouse moves more than 5 pixels)",
+            font=("Arial", 8)
+        ).pack(anchor="w", pady=(0, 5))
+
         self.duty_var.trace_add('write', self.update_duty_cycle)
         self.hold_var.trace_add('write', self.update_hold_time)
         self.limit_count_var.trace_add('write', self.update_click_limit)
+
+    def build_settings_tab(self):
+        self.create_section_label(self.settings_tab, "Theme Settings")
         
+        theme_frame = ttk.Frame(self.settings_tab)
+        theme_frame.pack(fill="x", pady=5)
+        
+        self.theme_var = tk.StringVar(value=self.settings["theme"])
+        
+        themes = [
+            ("Default", "default"),
+            ("Light", "light"),
+            ("Dark", "dark"),
+            ("Custom", "custom")
+        ]
+        
+        for i, (text, value) in enumerate(themes):
+            rb = ttk.Radiobutton(
+                theme_frame, 
+                text=text,
+                variable=self.theme_var,
+                value=value,
+                command=self.update_theme
+            )
+            rb.grid(row=0, column=i, padx=(0, 10))
+
+        custom_frame = ttk.Frame(self.settings_tab)
+        custom_frame.pack(fill="x", pady=5)
+        
+        custom_colors = self.settings.get("custom_colors", {})
+        
+        color_options = [
+            ("Background", "bg", custom_colors.get("bg", "#f0f0f0")),
+            ("Text", "fg", custom_colors.get("fg", "#000000")),
+            ("Accent", "accent", custom_colors.get("accent", "#0078d7"))
+        ]
+        
+        for i, (text, key, default) in enumerate(color_options):
+            ttk.Label(custom_frame, text=f"{text}:").grid(row=i, column=0, sticky="w", pady=2)
+            
+            color_frame = ttk.Frame(custom_frame)
+            color_frame.grid(row=i, column=1, sticky="w", padx=(5, 10), pady=2)
+            
+            color_preview = tk.Frame(color_frame, bg=default, width=20, height=20)
+            color_preview.pack(side="left")
+            
+            color_button = ttk.Button(
+                color_frame, 
+                text="Choose",
+                command=lambda k=key, p=color_preview: self.choose_color(k, p)
+            )
+            color_button.pack(side="left", padx=(5, 0))
+
+        self.create_section_label(self.settings_tab, "Configuration")
+        
+        config_frame = ttk.Frame(self.settings_tab)
+        config_frame.pack(fill="x", pady=5)
+        
+        import_button = ttk.Button(
+            config_frame, 
+            text="Import Settings",
+            command=self.import_settings
+        )
+        import_button.pack(side="left", padx=(0, 10))
+        
+        export_button = ttk.Button(
+            config_frame, 
+            text="Export Settings",
+            command=self.export_settings
+        )
+        export_button.pack(side="left")
+
+        reset_frame = ttk.Frame(self.settings_tab)
+        reset_frame.pack(fill="x", pady=10)
+        
+        reset_button = ttk.Button(
+            reset_frame, 
+            text="Reset to Default Settings",
+            command=self.reset_settings
+        )
+        reset_button.pack(side="left")
+            
     def build_settings_tab(self):
         self.create_section_label(self.settings_tab, "Theme Settings")
         
@@ -1001,6 +1154,11 @@ class AeroutSpeedAutoClickerGUI:
                 save_settings(self.settings)
         except ValueError:
             pass
+
+    def update_pause_movement(self):
+        self.settings["pause_on_movement"] = self.pause_movement_var.get()
+        save_settings(self.settings)
+        self.clicker_engine.settings = self.settings  
             
     def update_hold_time(self, *args):
         try:
@@ -1077,13 +1235,13 @@ class AeroutSpeedAutoClickerGUI:
             self.toggle_button.config(text="Stop")
             self.update_status("Running")
             
-    def update_status(self, status_text):
-        self.status_label.config(text=status_text)
-        
     def update_click_count_display(self):
         if hasattr(self.clicker_engine, 'click_count'):
             self.click_count_label.config(text=f"Clicks: {self.clicker_engine.click_count}")
         self.root.after(500, self.update_click_count_display)
+
+    def update_status(self, status_text):
+        self.status_label.config(text=status_text)
         
     def import_settings(self):
         file_path = filedialog.askopenfilename(
