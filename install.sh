@@ -1,9 +1,12 @@
+#!/bin/bash
+
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-#ts so tuff boi
+
+# ts so tuff bro omg >o<
 echo -e "${BLUE}"
 echo "  ___                  _    _       _        ___ _ _      _             "
 echo " / __|_ __  ___ ___ __| |  /_\  _  | |_ ___ / __| (_)__  | |_____ _ _   "
@@ -18,6 +21,20 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
     echo -e "${RED}Error: This installer is only for macOS systems.${NC}"
     exit 1
 fi
+
+echo "Checking system performance..."
+CPU_CORES=$(sysctl -n hw.ncpu)
+RAM_GB=$(($(sysctl -n hw.memsize) / 1024 / 1024 / 1024))
+
+if (( CPU_CORES < 2 )); then
+    echo -e "${YELLOW}Warning: Your system has only $CPU_CORES CPU cores. Performance may be affected.${NC}"
+fi
+
+if (( RAM_GB < 4 )); then
+    echo -e "${YELLOW}Warning: Your system has only $RAM_GB GB RAM. Performance may be affected.${NC}"
+fi
+
+echo -e "${GREEN}System has $CPU_CORES CPU cores and $RAM_GB GB RAM${NC}"
 
 echo "Checking Python version..."
 if ! command -v python3 &> /dev/null; then
