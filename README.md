@@ -74,10 +74,4 @@ A high-performance autoclicker with advanced features for macOS.
 - ➕ Added: `colorlog`, `pyautogui`, `numpy`  
 - ➖ Removed: `simplejson`, `tkfilebrowser`, `psutil`  
 
-## 📝 License
-
-MIT License - See included LICENSE file
-
----
-
 Made with ❤️ by RealAero
