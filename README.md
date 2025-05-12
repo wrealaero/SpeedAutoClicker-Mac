@@ -63,7 +63,6 @@ A high-performance autoclicker with advanced features for macOS.
 ### 🛠️ Improvements  
 - **5x faster** click loop using optimized Quartz calls  
 - **Reduced CPU usage** by 30% in idle mode  
-- **Pre-built macOS bundles** now available via GitHub Releases  
 
 ### 🐛 Fixed Issues  
 - Fixed memory leak in hotkey manager  
