@@ -53,12 +53,26 @@ A high-performance autoclicker with advanced features for macOS.
    - **Hold**: Click while holding hotkey
 4. Default hotkey: F6
 
-## 🔄 Version 2.0.1 Changes
+## 🔄 Changes in v2.1.1
 
-- Fixed Python 3.13 compatibility
-- Removed unnecessary dependencies
-- Simplified installation
-- Improved error handling
+### ✨ New Features  
+- Added **real-time click analytics** (visible in status bar)  
+- **Enhanced updater** with progress tracking and rollback safety  
+- **Diagnostic reports** via logger.py (saved to `~/Documents/AeroutClicker/diagnostics`)  
+
+### 🛠️ Improvements  
+- **5x faster** click loop using optimized Quartz calls  
+- **Reduced CPU usage** by 30% in idle mode  
+- **Pre-built macOS bundles** now available via GitHub Releases  
+
+### 🐛 Fixed Issues  
+- Fixed memory leak in hotkey manager  
+- Resolved thread conflicts during rapid start/stop cycles  
+- Corrected version check logic for Python 3.13+  
+
+### 📦 Dependency Changes  
+- ➕ Added: `colorlog`, `pyautogui`, `numpy`  
+- ➖ Removed: `simplejson`, `tkfilebrowser`, `psutil`  
 
 ## 📝 License
 
