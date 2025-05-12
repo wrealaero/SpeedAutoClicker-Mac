@@ -1,4 +1,4 @@
-## Starting to work on tryna make this work for both Windows & Linux
+## WILL BE MAKING A DISCORD SOON
 
 # 🚀 Aerout SpeedAutoClicker for macOS
 
