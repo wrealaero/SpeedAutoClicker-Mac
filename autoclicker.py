@@ -37,7 +37,7 @@ except ImportError as e:
     print("pip3 install pynput==1.7.6")
     sys.exit(1)
 
-VERSION = "2.0.2"
+VERSION = "2.1.1"
 SETTINGS_FILE = os.path.expanduser("~/.aeroutclicker.json")
 DISCORD_URL = "COMING SOON LMAO"
 GITHUB_REPO = "https://github.com/wrealaero/SpeedAutoClicker-Mac"
