@@ -4,5 +4,7 @@ packaging>=23.2
 pyobjc-core>=9.2.0; sys_platform == 'darwin'
 pyobjc-framework-Cocoa>=9.2.0; sys_platform == 'darwin'
 pyobjc-framework-Quartz>=9.2.0; sys_platform == 'darwin'
-simplejson>=3.19.2
-tkfilebrowser>=2.3.2
+
+colorlog>=6.7.0
+pyautogui>=0.9.53
+numpy>=1.24.0
